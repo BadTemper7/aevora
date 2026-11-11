@@ -23,6 +23,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=backend /app/server/node_modules ./server/node_modules
 COPY server/ ./server/
+RUN test -f /app/server/src/storage/imagekit.js \
+ && test -f /app/server/src/storage/imagekitPaths.js \
+ && test -f /app/server/src/storage/r2.js
 COPY deploy/ ./server/deploy/
 COPY --from=client-build /workspace/client/dist ./client/dist
 RUN mkdir -p /app/server/storage \

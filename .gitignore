@@ -4,6 +4,8 @@
 **/.env.*
 !**/.env.example
 !**/.env.imagekit.example
-**/storage/
+# Ignore runtime uploads, not source modules at server/src/storage/
+/server/storage/
+/storage/
 **/*.log
 .DS_Store

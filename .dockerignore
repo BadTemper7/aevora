@@ -7,6 +7,8 @@
 **/.git
 **/.DS_Store
 **/*.log
-**/storage
+# Ignore runtime uploads, not source modules at server/src/storage/
+/server/storage/
+/storage/
 **/coverage
 **/*.zip
