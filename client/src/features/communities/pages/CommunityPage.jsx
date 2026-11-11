@@ -50,6 +50,7 @@ import {
   InvitesPanel,
 } from "../components/CommunityPanels";
 import CommunitySettingsPanel from "../components/CommunitySettingsPanel";
+import CommunitySettingsBoundary from "../components/CommunitySettingsBoundary";
 import { Banner, CommunityAvatar } from "../components/CommunityVisuals";
 
 const icons = {
@@ -1121,11 +1122,12 @@ export default function CommunityPage() {
               permissions={community.permissions}
             />
           ) : view === "settings" ? (
-            <CommunitySettingsPanel
-              key={community.id}
-              community={hydrated}
-              permissions={community.permissions}
-            />
+            <CommunitySettingsBoundary key={community.id}>
+              <CommunitySettingsPanel
+                community={hydrated}
+                permissions={community.permissions || []}
+              />
+            </CommunitySettingsBoundary>
           ) : !selected ? (
             <div className="p-6 text-sm text-ink-soft">
               No accessible channels. Ask a moderator to create one.

@@ -27,7 +27,7 @@ import {
   communityError,
 } from "../api/communityApi";
 import { read } from "../../social/api/socialApi";
-import MediaPicker from "../../social/components/MediaPicker";
+import CommunityImageEditor from "../components/CommunityImageEditor";
 import { useVoiceSession } from "../hooks/useVoiceSession";
 import {
   field,
@@ -653,18 +653,16 @@ export default function CommunityDiscoveryPage() {
                 Icon and banner
               </summary>
               <div className="mt-3 space-y-3">
-                <MediaPicker
-                  purpose="community" variant="icon"
-                  accept="image/*"
-                  label="Upload icon"
+                <CommunityImageEditor
+                  variant="icon"
+                  valueId={form.iconId || ""}
                   onReady={(m) =>
                     setForm((f) => ({ ...f, iconId: m?.id || "" }))
                   }
                 />
-                <MediaPicker
-                  purpose="community" variant="banner"
-                  accept="image/*"
-                  label="Upload banner"
+                <CommunityImageEditor
+                  variant="banner"
+                  valueId={form.bannerId || ""}
                   onReady={(m) =>
                     setForm((f) => ({ ...f, bannerId: m?.id || "" }))
                   }

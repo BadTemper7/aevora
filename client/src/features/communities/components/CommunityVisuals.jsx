@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { communityFile } from "../api/communityApi";
 
 // Static class strings so Tailwind can see them.
@@ -24,15 +25,19 @@ export function CommunityAvatar({
   rounded = "rounded-2xl",
   className = "",
 }) {
+  const [failedId, setFailedId] = useState("");
+  const hasImage = Boolean(community.iconId && failedId !== community.iconId);
   return (
     <div
       className={`grid shrink-0 place-items-center overflow-hidden bg-brand-soft font-extrabold text-brand-ink ${size} ${text} ${rounded} ${className}`}
     >
-      {community.iconId ? (
+      {hasImage ? (
         <img
+          key={community.iconId}
           src={communityFile(community.iconId, true)}
           alt=""
           className="size-full object-cover"
+          onError={() => setFailedId(community.iconId)}
         />
       ) : (
         (community.name?.[0] || "?").toUpperCase()
@@ -42,16 +47,20 @@ export function CommunityAvatar({
 }
 
 export function Banner({ community, className = "" }) {
+  const [failedId, setFailedId] = useState("");
+  const hasImage = Boolean(community.bannerId && failedId !== community.bannerId);
   return (
     <div
       className={`relative overflow-hidden bg-gradient-to-br ${bannerTint(community.name)} ${className}`}
     >
-      {community.bannerId && (
+      {hasImage && (
         <img
+          key={community.bannerId}
           src={communityFile(community.bannerId)}
           alt=""
           loading="lazy"
           className="size-full object-cover"
+          onError={() => setFailedId(community.bannerId)}
         />
       )}
     </div>
