@@ -238,13 +238,35 @@ const storySchema = new Schema({
   music: { type: Schema.Types.Mixed, default: null },
   promptSource: { type: Schema.Types.Mixed, default: null },
   groupId: { type: String, index: true },
+  renderJobId: { type: Schema.Types.ObjectId, default: null },
   slideIndex: { type: Number, default: 0 },
   expiresAt: { type: Date, required: true },
 }, opts("social_stories"));
 storySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 storySchema.index({ ownerId: 1, createdAt: -1 });
 storySchema.index({ groupId: 1, slideIndex: 1 });
+storySchema.index({ renderJobId: 1 }, { unique: true, sparse: true, partialFilterExpression: { renderJobId: { $type: 'objectId' } } });
 export const SocialStory = models.SocialStory || model("SocialStory", storySchema);
+
+// Timeline exports are processed asynchronously. A render is never visible in
+// stories until its final optimized MP4 has been uploaded and verified.
+const storyRenderJobSchema = new Schema({
+  ownerId: str,
+  requestId: { type: String, required: true },
+  manifest: { type: Schema.Types.Mixed, required: true },
+  status: { type: String, enum: ['pending','rendering','uploading','ready','failed'], default: 'pending' },
+  progress: { type: Number, default: 0 },
+  attempts: { type: Number, default: 0 },
+  error: { type: String, default: null },
+  startedAt: Date,
+  completedAt: Date,
+  outputMediaId: { type: Schema.Types.ObjectId, ref: 'SocialMedia' },
+  storyId: { type: Schema.Types.ObjectId, ref: 'SocialStory' },
+}, opts('social_story_render_jobs'));
+storyRenderJobSchema.index({ ownerId: 1, requestId: 1 }, { unique: true });
+storyRenderJobSchema.index({ status: 1, createdAt: 1 });
+export const StoryRenderJob = models.StoryRenderJob || model('StoryRenderJob', storyRenderJobSchema);
+
 
 const storyMusicSchema = new Schema({
   ownerId: str,

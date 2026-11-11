@@ -28,7 +28,10 @@ export const storySlide = z.object({ mediaId: z.string().regex(/^[a-f0-9]{24}$/i
   if (slide.mediaKind === 'video' && slide.effects.trimEnd && slide.effects.trimEnd <= slide.effects.trimStart) ctx.addIssue({ code:'custom', message:'Video end time must be after start.', path:['effects','trimEnd'] });
   if (new Set(slide.layers.map(x=>x.id)).size !== slide.layers.length) ctx.addIssue({ code:'custom', message:'Every sticker must have a unique ID.', path:['layers'] });
 });
-export const storyBatch = z.object({ slides: z.array(storySlide).min(1).max(10) }).strict();
+export const storyBatch = z.object({ slides: z.array(storySlide).min(1).max(10) }).strict().superRefine((value, ctx) => {
+  const seconds=value.slides.reduce((sum,slide)=>sum+slide.duration,0);
+  if(seconds>60.0001)ctx.addIssue({code:'custom',message:'Total story duration cannot exceed 60 seconds.',path:['slides']});
+});
 export const reactionResponse = z.discriminatedUnion('type', [
  z.object({ type:z.literal('poll'), option:z.number().int().min(0).max(3) }),
  z.object({ type:z.literal('question'), answer:z.string().trim().min(1).max(500) }),
