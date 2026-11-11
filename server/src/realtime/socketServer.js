@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import { clientIpFromSocket } from "../network/trustedClientIp.js";
 import { fromNodeHeaders } from "better-auth/node";
 import { env } from "../config/env.js";
 import { Conversation, Friendship, Message, Presence } from "../social/models.js";
@@ -11,6 +12,11 @@ export function attachSockets(httpServer, auth) {
   io.use(async (socket, next) => {
     try {
       if (socket.handshake.headers.origin !== env.CLIENT_URL) return next(new Error("Invalid origin"));
+      // Socket.IO handshakes do not pass through Express middleware. Overwrite
+      // the same internal IP header used by Better Auth on HTTP requests.
+      const clientIp = clientIpFromSocket(socket, env.TRUST_PROXY_HOPS);
+      if (!clientIp) return next(new Error("Client address unavailable"));
+      socket.handshake.headers["x-aevora-client-ip"] = clientIp;
       const session = await auth.api.getSession({ headers: fromNodeHeaders(socket.handshake.headers), query: { disableCookieCache: true } });
       if (!session?.user?.username) return next(new Error("Not authenticated"));
       socket.data.userId = session.user.id;

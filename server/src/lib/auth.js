@@ -23,6 +23,9 @@ export function createAuth({ database } = {}) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     trustedOrigins: [env.CLIENT_URL],
+    // This header is overwritten by Express (never trusted from the client).
+    // It gives Better Auth a validated IP for per-client auth rate limits.
+    advanced: { ipAddress: { ipAddressHeaders: ["x-aevora-client-ip"] } },
     database,
 
     emailAndPassword: { enabled: true, minPasswordLength: 8, maxPasswordLength: 128, autoSignIn: true },

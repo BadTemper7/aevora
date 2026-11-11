@@ -1,4 +1,5 @@
 import cors from "cors";
+import { clientIpFromRequest } from "./network/trustedClientIp.js";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -31,6 +32,23 @@ export function createApp(auth) {
   const app = express();
   app.locals.auth = auth;
   app.disable("x-powered-by");
+  // Render terminates HTTPS behind a reverse proxy. Trust only the configured
+  // number of proxy hops, never arbitrary X-Forwarded-For addresses.
+  app.set("trust proxy", env.TRUST_PROXY_HOPS || false);
+  // Better Auth cannot access Express req.ip itself. Supply an internally
+  // resolved header for EVERY request, replacing any client-supplied value.
+  app.use((req, res, next) => {
+    const clientIp = clientIpFromRequest(req);
+    if (!clientIp) {
+      delete req.headers["x-aevora-client-ip"];
+      if (req.path.startsWith("/api")) {
+        return res.status(400).json({ success: false, error: { code: "CLIENT_IP_UNAVAILABLE", message: "Could not identify the request connection." } });
+      }
+    } else {
+      req.headers["x-aevora-client-ip"] = clientIp;
+    }
+    next();
+  });
   app.use(helmet({ crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, crossOriginResourcePolicy: { policy: "same-origin" } }));
   app.use(cors(corsOptions));
   if (env.NODE_ENV === "development") app.use(morgan("dev"));

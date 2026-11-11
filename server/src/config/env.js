@@ -4,6 +4,9 @@ import { z } from "zod";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(5000),
+  // Render defaults to one trusted reverse-proxy hop. Adjust only after
+  // validating the actual proxy chain: excessive hops permit IP spoofing.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(process.env.NODE_ENV === "production" ? 1 : 0),
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
   MONGODB_URI: z.string().min(1).default("mongodb://127.0.0.1:27017/aevora"),
   // Better Auth signs and encrypts with this; 32+ random characters
