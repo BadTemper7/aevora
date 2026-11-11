@@ -3,13 +3,20 @@ import mongoose from 'mongoose';
 import { Router } from 'express';
 import { z } from 'zod';
 import { AppError } from '../utils/AppError.js';
-import { Media, SocialStory, SocialStoryView, StoryMusic, StoryMusicFavorite, StoryStickerResponse } from './models.js';
+import { Block, Friendship, Media, SocialStory, SocialStoryView, StoryMusic, StoryMusicFavorite, StoryStickerResponse } from './models.js';
 import { canSeeStory } from './feedRules.js';
 import { blocked, objectId, usersByIds, privacyFor, audienceAllows } from './helpers.js';
 import { body, wrap } from './routeUtils.js';
-import { storyBatch, storySlide, reactionResponse, musicInput } from './storyRules.js';
+import { storyBatch, storySlide, storyVisibility, storyAllowedViewerIds, reactionResponse, musicInput } from './storyRules.js';
 
 const router = Router();
+// Stories are private to the current session. Never let browsers, shared
+// proxies, or a switched account reuse another viewer's response.
+router.use('/stories', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Vary', 'Cookie');
+  next();
+});
 const visibleStory = async (viewer, id) => {
   const story = await SocialStory.findById(objectId(id)).lean();
   if (!story || !await canSeeStory(viewer, story)) throw new AppError('Story not available.', 404);
@@ -57,7 +64,21 @@ router.post('/story-music/:id/favorite', wrap(async (req) => {
   return { favorite };
 }));
 
+async function validateSelectedFriends(slides, ownerId) {
+  const selected = [...new Set(slides.filter(s => s.visibility === 'selected').flatMap(s => s.allowedViewerIds))];
+  if (!selected.length) return;
+  const friendships = await Friendship.find({ members: ownerId, status: 'accepted' }).select('members').lean();
+  const acceptedIds = new Set(friendships.flatMap(row => row.members.filter(id => id !== ownerId)));
+  if (selected.some(id => id === ownerId || !acceptedIds.has(id))) throw new AppError('Selected viewers must be your accepted friends.', 403);
+  const conflictingBlocks = await Block.exists({ $or: [
+    { blocker: ownerId, blocked: { $in: selected } },
+    { blocked: ownerId, blocker: { $in: selected } },
+  ] });
+  if (conflictingBlocks) throw new AppError('Blocked users cannot be selected as story viewers.', 403);
+}
+
 async function validateSlides(slides, ownerId) {
+  await validateSelectedFriends(slides, ownerId);
   const mediaIds = [...new Set([...slides.map(x=>x.mediaId), ...slides.flatMap(x=>x.layers.filter(l=>l.type==='image').map(l=>l.mediaId))].filter(Boolean))].map(objectId);
   const trackIds = [...new Set(slides.map(x=>x.music?.trackId).filter(Boolean))].map(objectId);
   const [media, tracks] = await Promise.all([
@@ -113,7 +134,11 @@ async function publishSlides(viewer, slides, promptSource = null) {
   return { groupId, stories: rows.map(x=>({ id: x.id, expiresAt: x.expiresAt })) };
 }
 router.get('/stories', wrap(async (req) => {
-  const rows = await SocialStory.find({ expiresAt: { $gt: new Date() } }).sort({ _id: -1 }).limit(150).lean();
+  // Limit the database query to the viewer and their friends. Otherwise
+  // unrelated public stories could crowd friends' stories out of the limit.
+  const friendships = await Friendship.find({ members: req.user.id, status: 'accepted' }).select('members').lean();
+  const friendIds = friendships.flatMap(row => row.members.filter(id => id !== req.user.id));
+  const rows = await SocialStory.find({ ownerId: { $in: [req.user.id, ...friendIds] }, expiresAt: { $gt: new Date() } }).sort({ _id: -1 }).limit(150).lean();
   const allowed = [];
   for (const story of rows) if (await canSeeStory(req.user.id, story)) allowed.push(story);
   const [users, seen, tracks] = await Promise.all([
@@ -133,10 +158,10 @@ router.post('/stories/batch', wrap(async (req) => {
   return publishSlides(req.user.id, input.slides, input.promptSource);
 }));
 router.post('/stories', wrap(async (req) => {
-  const input = body(req, z.object({ mediaId: z.string().regex(/^[a-f0-9]{24}$/i), visibility: z.enum(['public','friends','followers']).default('public') }).strict());
+  const input = body(req, z.object({ mediaId: z.string().regex(/^[a-f0-9]{24}$/i), visibility: storyVisibility.default('friends'), allowedViewerIds: storyAllowedViewerIds }).strict());
   const media = await Media.findOne({ _id: objectId(input.mediaId), ownerId: req.user.id, purpose: 'story', status: 'ready' }).lean();
   if (!media || !['image','gif','video'].includes(media.kind)) throw new AppError('Story media is not ready.', 400);
-  const parsed = storySlide.parse({ mediaId: input.mediaId, mediaKind: media.kind, visibility: input.visibility, duration: media.kind === 'video' ? Math.min(15, media.duration || 15) : 10 });
+  const parsed = storySlide.parse({ mediaId: input.mediaId, mediaKind: media.kind, visibility: input.visibility, allowedViewerIds: input.allowedViewerIds, duration: media.kind === 'video' ? Math.min(15, media.duration || 15) : 10 });
   const result = await publishSlides(req.user.id, [parsed]);
   return { id: result.stories[0].id, mediaId: input.mediaId, expiresAt: result.stories[0].expiresAt };
 }));

@@ -186,11 +186,15 @@ async function authorizeMedia(req, media) {
     return false;
   }
   if (media.purpose === "story") {
-    const cover = await StoryMusic.findOne({ coverId: media._id }).lean();
-    if (cover?.visibility === 'public') return true;
     const stories = await SocialStory.find({ $or: [{ mediaId: media._id }, { 'layers.mediaId': String(media._id) }], expiresAt: { $gt: new Date() } }).lean();
-    for (const story of stories) if (await canSeeStory(req.user.id, story)) return true;
-    return false;
+    // An active story's friend/selected-friend privacy takes precedence over
+    // any secondary use of the image as public music cover artwork.
+    if (stories.length) {
+      for (const story of stories) if (await canSeeStory(req.user.id, story)) return true;
+      return false;
+    }
+    const cover = await StoryMusic.findOne({ coverId: media._id }).lean();
+    return cover?.visibility === 'public';
   }
   if (["avatar", "cover"].includes(media.purpose)) {
     const p = await Profile.findOne({ [media.purpose === "avatar" ? "avatarId" : "coverId"]: String(media._id) }).lean();
@@ -205,6 +209,9 @@ router.get("/media/:id/file", async (req, res, next) => {
   try {
     const media = await Media.findById(objectId(req.params.id)).lean();
     if (!media || media.status !== "ready") throw new AppError("Media is not ready.", 404);
+    // Set no-store even for denied requests, before checking permissions.
+    res.setHeader('Cache-Control', media.purpose === 'story' ? 'private, no-store, max-age=0' : 'private, max-age=300');
+    if (media.purpose === 'story') res.setHeader('Vary', 'Cookie');
     if (!await authorizeMedia(req, media)) throw new AppError("You are not allowed to view this media.", 403);
     const thumbnail = req.query.thumb === "1";
     const dynamicThumbnail = thumbnail && isDynamicImageThumbnail(media);
@@ -213,7 +220,6 @@ router.get("/media/:id/file", async (req, res, next) => {
     if (!key && !media.objectKey) throw new AppError("Media file is not available.", 404);
     const mime = thumbnail ? 'image/webp' : media.mime;
     res.setHeader('Content-Type', mime);
-    res.setHeader('Cache-Control', 'private, max-age=300');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (media.kind === 'file') {
       const safeName = String(media.originalName || 'attachment').replace(/[\\\r\n";\/]/g, '_').slice(0, 120);
@@ -256,6 +262,9 @@ router.get("/media/:id/file", async (req, res, next) => {
 router.get('/media/:id/signed-url', wrap(async (req) => {
   const media = await Media.findById(objectId(req.params.id)).lean();
   if (!media || media.status !== 'ready') throw new AppError('Media not found.', 404);
+  // A signed URL is a bearer link and can be forwarded to a non-friend.
+  // Story assets must go through the session-authorized /file endpoint.
+  if (media.purpose === 'story') throw new AppError('Private stories do not support shareable media URLs.', 403);
   if (!await authorizeMedia(req, media)) throw new AppError('Not authorized.', 403);
   if (!['imagekit', 'cloudflare-r2'].includes(media.storageProvider)) throw new AppError('Only cloud media supports signed URLs.', 409);
   const thumb = req.query.thumb === '1';

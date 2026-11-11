@@ -1,4 +1,5 @@
 import { audienceAllows, blocked, isFollower, isFriend, privacyFor } from "./helpers.js";
+import { storyAccessAllowed, storyAudienceAllows } from "./storyAudiencePolicy.js";
 
 // Feed and media-file endpoints intentionally share these authorization checks.
 export async function canSeePost(viewer, post) {
@@ -11,11 +12,18 @@ export async function canSeePost(viewer, post) {
 }
 
 export async function canSeeStory(viewer, story) {
-  if (new Date(story.expiresAt).getTime() <= Date.now()) return false;
-  if (viewer === story.ownerId) return true;
+  if (!viewer || !story?.ownerId) return false;
+  // Check validity before contacting the DB. Owner access still requires an
+  // unexpired story, but does not require a Friendship record.
+  if (viewer === story.ownerId) return storyAccessAllowed(viewer, story);
+  if (!storyAccessAllowed(viewer, story, { acceptedFriend: true })) return false;
   if (await blocked(viewer, story.ownerId)) return false;
+  // Follow/subscription status is never enough. Accepted friends only.
+  if (!await isFriend(viewer, story.ownerId)) return false;
+  if (!storyAudienceAllows(viewer, story)) return false;
   const privacy = await privacyFor(story.ownerId);
-  if (privacy.privateProfile && !await isFriend(viewer, story.ownerId) && !await isFollower(viewer, story.ownerId)) return false;
-  if (!await audienceAllows(viewer, story.ownerId, privacy.profileVisibility || "public")) return false;
-  return audienceAllows(viewer, story.ownerId, story.visibility);
+  return storyAccessAllowed(viewer, story, {
+    acceptedFriend: true,
+    profileAllowed: await audienceAllows(viewer, story.ownerId, privacy.profileVisibility || "public"),
+  });
 }

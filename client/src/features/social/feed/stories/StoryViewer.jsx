@@ -14,26 +14,40 @@ export default function StoryViewer({ stories, initialId, user, onClose, onAddYo
   const [sound,setSound]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
+  const [authorizedKey,setAuthorizedKey]=useState('');
   const audioRef=useRef(null);const videoRef=useRef(null);
   useEffect(()=>()=>{audioRef.current?.pause();videoRef.current?.pause();},[]);const lastTick=useRef(performance.now());
   const client=useQueryClient();
   const story=ordered[Math.min(index,ordered.length-1)];
+  const currentAuthKey=`${user?.id||''}:${story?.id||''}`;
+  const authorized=!!user?.id && !!story?.id && authorizedKey===currentAuthKey;
   const duration=Math.max(3,story?.duration||10);
-  const results=useQuery({queryKey:['stories','stickers',story?.id],queryFn:()=>read(`/stories/${story.id}/sticker-results`),enabled:!!story?.id,staleTime:2000});
+  const results=useQuery({queryKey:['stories',user?.id,'stickers',story?.id],queryFn:()=>read(`/stories/${story.id}/sticker-results`),enabled:authorized,staleTime:2000});
   const advance=useCallback((delta=1)=>{setElapsed(0);setPaused(false);setError('');setIndex(x=>{const target=x+delta;if(target>=ordered.length||target<0){onClose?.();return x;}return target;});},[ordered.length,onClose]);
-  useEffect(()=>{if(!story)return;let active=true;create(`/stories/${story.id}/view`).then(()=>active&&client.invalidateQueries({queryKey:['stories'],exact:true})).catch(()=>{});return()=>{active=false;};},[story?.id,client]);
-  useEffect(()=>{setElapsed(0);setPaused(false);lastTick.current=performance.now();const audio=audioRef.current;if(audio&&story?.music?.track){audio.currentTime=story.music.start||0;audio.volume=story.music.volume??.7;if(sound)audio.play().catch(()=>setSound(false));}const video=videoRef.current;if(video){video.currentTime=story?.effects?.trimStart||0;video.volume=story?.music?.originalVolume??1;video.muted=!sound;video.play().catch(()=>{});}},[story?.id]);
-  useEffect(()=>{if(!story)return undefined;let last=performance.now();const timer=setInterval(()=>{const now=performance.now();const delta=(now-last)/1000;last=now;if(!paused){setElapsed(t=>Math.min(duration,t+Math.min(delta,.5)));}},100);return()=>clearInterval(timer);},[story?.id,duration,paused]);
+  // Do not render a cached story or load its media before a fresh server
+  // authorization succeeds. Recheck when either the story or user changes.
+  useEffect(()=>{
+    if(!story?.id || !user?.id)return;
+    let active=true;
+    const key=`${user.id}:${story.id}`;
+    create(`/stories/${story.id}/view`)
+      .then(()=>{if(active){setAuthorizedKey(key);void client.invalidateQueries({queryKey:['stories',user.id],exact:true});}})
+      .catch(()=>{if(active){setAuthorizedKey('');onClose?.();}});
+    return()=>{active=false;};
+  },[story?.id,user?.id,client]);
+  useEffect(()=>{if(!authorized)return;setElapsed(0);setPaused(false);lastTick.current=performance.now();const audio=audioRef.current;if(audio&&story?.music?.track){audio.currentTime=story.music.start||0;audio.volume=story.music.volume??.7;if(sound)audio.play().catch(()=>setSound(false));}const video=videoRef.current;if(video){video.currentTime=story?.effects?.trimStart||0;video.volume=story?.music?.originalVolume??1;video.muted=!sound;video.play().catch(()=>{});}},[story?.id,authorized]);
+  useEffect(()=>{if(!story||!authorized)return undefined;let last=performance.now();const timer=setInterval(()=>{const now=performance.now();const delta=(now-last)/1000;last=now;if(!paused){setElapsed(t=>Math.min(duration,t+Math.min(delta,.5)));}},100);return()=>clearInterval(timer);},[story?.id,duration,paused,authorized]);
   useEffect(()=>{if(elapsed>=duration-.05&&!paused)advance(1);},[elapsed,duration,paused,advance]);
   useEffect(()=>{const onKey=e=>{if(e.key==='Escape')onClose();if(e.key==='ArrowRight')advance(1);if(e.key==='ArrowLeft')advance(-1);if(e.key===' ') {e.preventDefault();setPaused(v=>!v);}};document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey);},[advance,onClose]);
   useEffect(()=>{const audio=audioRef.current,video=videoRef.current;if(audio){if(paused)audio.pause();else if(sound)audio.play().catch(()=>{});}if(video){if(paused)video.pause();else video.play().catch(()=>{});}},[paused,sound,story?.id]);
   const toggleSound=()=>{setSound(v=>{const next=!v;if(audioRef.current){audioRef.current.currentTime=Math.min(Number(story.music?.track?.duration||3600),Number(story.music?.start||0)+elapsed);audioRef.current.volume=story.music?.volume??.7;audioRef.current.muted=!next;if(next)audioRef.current.play().catch(()=>{});else audioRef.current.pause();}if(videoRef.current)videoRef.current.muted=!next;return next;});};
   const respond=async(layer,payload)=>{
     if(payload.type==='add_yours'){onAddYours?.({storyId:story.id,stickerId:layer.id,prompt:layer.prompt});return;}
-    setBusy(true);setError('');try{await create(`/stories/${story.id}/stickers/${layer.id}/respond`,payload);await client.invalidateQueries({queryKey:['stories','stickers',story.id]});}catch(e){setError(errorText(e));}finally{setBusy(false);}
+    setBusy(true);setError('');try{await create(`/stories/${story.id}/stickers/${layer.id}/respond`,payload);await client.invalidateQueries({queryKey:['stories',user?.id,'stickers',story.id]});}catch(e){setError(errorText(e));}finally{setBusy(false);}
   };
   const deleteCurrent=async()=>{if(busy)return;setBusy(true);try{await remove(`/stories/${story.id}`);await client.invalidateQueries({queryKey:['stories']});advance(1);}catch(e){setError(errorText(e));}finally{setBusy(false);}};
   if(!story)return null;
+  if(!authorized)return createPortal(<section role="dialog" aria-modal="true" aria-label="Verifying story access" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-4 text-white"><p role="status" className="text-sm">Checking story access...</p></section>,document.body);
   const percent=Math.min(100,elapsed/duration*100);
   return createPortal(<section role="dialog" aria-modal="true" aria-label="AEVORA story viewer" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-2 text-white sm:p-5">
     <div className="relative flex h-full max-h-[95dvh] w-full max-w-[480px] flex-col">
