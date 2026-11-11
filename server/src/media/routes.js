@@ -17,6 +17,8 @@ import { ensureMediaFolders, maxImageBytes, maxVideoBytes, mediaDirs, mediaPath,
 import { streamPrivateObject, signedPrivateDownload, storageMode } from '../storage/imagekit.js';
 import { env } from '../config/env.js';
 import { scanUploadedFile } from './scan.js';
+import { useSanitizedBrandingPreview } from './brandingPolicy.js';
+import { sanitizeBrandingImage } from './brandingSanitizer.js';
 import { isDynamicImageThumbnail } from './thumbnailPolicy.js';
 
 const router = Router();
@@ -46,6 +48,7 @@ router.post("/media", uploadRateLimiter, async (req, res, next) => {
   const file = req.file;
   if (!file) throw new AppError("Select a file to upload.", 400);
   const purpose = req.body?.purpose;
+  let sanitizedFilename = null;
   try {
     if (!["message", "video", "avatar", "cover", "post", "story", "community", "story_audio"].includes(purpose)) throw new AppError("Invalid upload purpose.", 400);
     const type = await fileTypeFromFile(file.path);
@@ -71,21 +74,37 @@ router.post("/media", uploadRateLimiter, async (req, res, next) => {
       { $group: { _id: null, bytes: { $sum: '$bytes' } } },
     ]);
     if ((activeBytes[0]?.bytes || 0) + file.size > env.MAX_USER_STORAGE_MB * 1024 * 1024) throw new AppError('Storage quota reached. Remove old uploads before adding more.', 413);
-    await scanUploadedFile(file.path);
+    // A deliberately restricted, explicitly enabled preview mode allows only
+    // community icon/banner raster images. They are fully decoded/re-encoded
+    // before persistence; all other media still require a working scanner.
+    const variant = purpose === 'community' && ['icon','banner'].includes(req.body?.variant) ? req.body.variant : null;
+    const sanitizedPreview = useSanitizedBrandingPreview({ purpose, variant, mime: actual });
+    let storedSize = file.size;
+    if (sanitizedPreview) {
+      const sanitized = await sanitizeBrandingImage(file.path, variant);
+      sanitizedFilename = sanitized.filename;
+      storedSize = sanitized.size;
+      actual = 'image/webp';
+    } else {
+      await scanUploadedFile(file.path);
+    }
     const key = `${randomUUID()}.${extensions[actual]}`;
-    await rename(file.path, mediaPath('originals', key));
+    await rename(sanitizedFilename || file.path, mediaPath('originals', key));
+    sanitizedFilename = null;
     try {
-      const variant = purpose === 'community' && ['icon','banner'].includes(req.body?.variant) ? req.body.variant : null;
       const clipStart = purpose === 'story' && kind === 'video' ? Number(req.body?.clipStart || 0) : 0;
       const clipEnd = purpose === 'story' && kind === 'video' ? Number(req.body?.clipEnd || 0) : 0;
       if (![clipStart, clipEnd].every(Number.isFinite) || clipStart < 0 || clipEnd < 0 || clipStart > 3600 || clipEnd > 3600 || (clipEnd && clipEnd <= clipStart)) throw new AppError('Invalid video trim times.', 400);
       const reportedSize = Math.max(file.size, Math.min(maxVideoBytes, Number(req.body?.sourceOriginalSize) || file.size));
       const item = await Media.create({ ownerId: req.user.id, originalName: path.basename(String(req.body?.originalName || file.originalname)).slice(0, 255), originalMime: actual, kind,
-        originalKey: key, clipStart, clipEnd, status: 'pending', progress: 0, purpose, size: file.size, receivedSize: file.size, originalSize: reportedSize,
+        originalKey: key, clipStart, clipEnd, status: 'pending', progress: 0, purpose, size: storedSize, receivedSize: file.size, originalSize: reportedSize,
         storageProvider: storageMode === 'imagekit' ? 'imagekit' : 'local', variant });
       return { id: item.id, status: item.status, kind: item.kind, originalName: item.originalName };
     } catch (error) { await rm(mediaPath('originals', key), { force: true }); throw error; }
-  } finally { await rm(file.path, { force: true }); }
+  } finally {
+    await rm(file.path, { force: true });
+    if (sanitizedFilename) await rm(sanitizedFilename, { force: true });
+  }
 }));
 
 router.get("/media/:id/status", wrap(async (req) => {

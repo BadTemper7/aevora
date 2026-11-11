@@ -12,6 +12,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Free PREVIEW only: community icon/banner raster images are decoded and
+      # regenerated as WebP. This is not antivirus scanning. Other media
+      # uploads still require a ClamAV service and fail closed without one.
+      # For a real production deployment set this to required-scan and connect
+      # a working ClamAV daemon (see COMMUNITY_UPLOAD_SCAN_FIX.md).
+      - key: COMMUNITY_BRANDING_IMAGE_MODE
+        value: sanitize-only
       - key: PORT
         value: '10000'
       - key: TRUST_PROXY_HOPS
