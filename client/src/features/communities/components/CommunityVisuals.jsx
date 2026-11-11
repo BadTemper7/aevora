@@ -30,14 +30,14 @@ export function CommunityAvatar({
   const hasImage = Boolean(community.iconId && failedId !== community.iconId);
   return (
     <div
-      className={`grid shrink-0 place-items-center overflow-hidden bg-brand-soft font-extrabold text-brand-ink ${size} ${text} ${rounded} ${className}`}
+      className={`grid shrink-0 place-items-center overflow-hidden font-extrabold text-brand-ink ${hasImage ? "bg-white" : "bg-brand-soft"} ${size} ${text} ${rounded} ${className}`}
     >
       {hasImage ? (
         <img
           key={community.iconId}
           src={communityFile(community.iconId, true)}
           alt=""
-          className={`size-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`}
+          className={`size-full ${imageFit === "contain" ? "object-contain p-1" : "object-cover"}`}
           onError={() => setFailedId(community.iconId)}
         />
       ) : (
@@ -49,7 +49,9 @@ export function CommunityAvatar({
 
 export function Banner({ community, className = "" }) {
   const [failedId, setFailedId] = useState("");
-  const hasImage = Boolean(community.bannerId && failedId !== community.bannerId);
+  const hasImage = Boolean(
+    community.bannerId && failedId !== community.bannerId,
+  );
   return (
     <div
       className={`relative overflow-hidden bg-gradient-to-br ${bannerTint(community.name)} ${className}`}
