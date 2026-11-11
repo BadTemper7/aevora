@@ -309,7 +309,7 @@ export default function CommunityDiscoveryPage() {
   );
 
   return (
-    <div className="custom-scrollbar w-full overflow-y-auto px-3 pb-28 pt-4 sm:px-6 lg:px-8">
+    <div className="custom-scrollbar w-full min-h-0 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pb-8 lg:px-8">
       <div className="mx-auto max-w-[1280px] space-y-10">
         <section className="relative overflow-hidden rounded-[2rem] border border-line bg-surface/60 p-6 sm:p-10">
           <div

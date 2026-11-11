@@ -939,14 +939,14 @@ export default function CommunityPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-surface via-surface/85 to-surface/40" />
         </div>
-        <div className="relative flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4">
-          <div className="relative">
+        <div className="relative flex min-w-0 items-center justify-between gap-2 p-3 sm:px-4">
+          <div className="relative min-w-0 flex-1">
             <button
               type="button"
               aria-haspopup="menu"
               aria-expanded={switcher}
               onClick={() => setSwitcher((v) => !v)}
-              className="flex items-center gap-3 rounded-2xl p-1.5 pr-3 text-left transition-colors hover:bg-raised/70"
+              className="flex min-w-0 max-w-full items-center gap-3 rounded-2xl p-1.5 pr-2 text-left transition-colors hover:bg-raised/70"
             >
               <CommunityAvatar
                 community={community}
@@ -958,7 +958,7 @@ export default function CommunityPage() {
                 <span className="block truncate text-base font-extrabold leading-tight">
                   {community.name}
                 </span>
-                <span className="block text-xs text-ink-soft">
+                <span className="block truncate text-xs text-ink-soft">
                   {community.category} · {community.memberCount} members
                 </span>
               </span>
@@ -1016,31 +1016,13 @@ export default function CommunityPage() {
             )}
           </div>
 
-          <nav
-            aria-label="Community sections"
-            className="order-last flex w-full gap-1 rounded-full border border-line bg-raised/70 p-1 sm:order-none sm:w-auto"
-          >
-            {tabs.map(([value, label, Icon]) => (
-              <button
-                key={value}
-                type="button"
-                aria-current={view === value ? "page" : undefined}
-                onClick={() => setView(value)}
-                className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all sm:flex-none ${view === value ? "bg-surface text-ink shadow-md" : "text-ink-soft hover:text-ink"}`}
-              >
-                <Icon size={14} />
-                {label}
-              </button>
-            ))}
-          </nav>
-
           <button
             type="button"
             onClick={toggleMembers}
             title="Show or hide members"
             aria-label="Show or hide members"
             aria-pressed={membersOpen}
-            className={`flex items-center gap-2 rounded-full border bg-surface/70 p-1 pr-3 transition-colors hover:bg-raised ${membersOpen ? "border-brand/50" : "border-line"}`}
+            className={`flex shrink-0 items-center gap-2 rounded-full border bg-surface/70 p-1 pr-2 transition-colors hover:bg-raised sm:pr-3 ${membersOpen ? "border-brand/50" : "border-line"}`}
           >
             <span className="flex -space-x-2">
               {heroMembers.map((m) => (
@@ -1070,6 +1052,23 @@ export default function CommunityPage() {
             <Users size={15} className="text-ink-soft" />
           </button>
         </div>
+        <nav
+          aria-label="Community sections"
+          className="relative mx-3 mb-3 grid grid-cols-4 gap-1 rounded-2xl border border-line bg-raised/70 p-1 sm:mx-4 sm:flex sm:w-fit"
+        >
+          {tabs.map(([value, label, Icon]) => (
+            <button
+              key={value}
+              type="button"
+              aria-current={view === value ? "page" : undefined}
+              onClick={() => setView(value)}
+              className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-bold leading-tight transition-colors sm:flex-row sm:flex-none sm:gap-2 sm:px-4 sm:py-2 sm:text-xs ${view === value ? "bg-surface text-ink shadow-sm" : "text-ink-soft hover:bg-surface/50 hover:text-ink"}`}
+            >
+              <Icon size={16} className="shrink-0" aria-hidden="true" />
+              <span className="whitespace-nowrap">{label}</span>
+            </button>
+          ))}
+        </nav>
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3 p-3">

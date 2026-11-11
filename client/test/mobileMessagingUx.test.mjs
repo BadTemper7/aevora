@@ -15,9 +15,9 @@ test("Communities and other app pages are accessible from the messenger header",
   assert.match(layout, /<ThemeToggle\s*\/>/);
 });
 
-test("Messenger has no bottom tab navigation, while Communities retains its tabs", () => {
+test("Messenger and Communities have no bottom tab navigation", () => {
   assert.doesNotMatch(source("layouts/MessageLayout.jsx"), /<MobileNav/);
-  assert.match(source("layouts/CommunityLayout.jsx"), /<MobileNav docked\s*\/>/);
+  assert.doesNotMatch(source("layouts/CommunityLayout.jsx"), /<MobileNav/);
 });
 
 test("Chat starts at its most recent message and offers a Latest shortcut", () => {
