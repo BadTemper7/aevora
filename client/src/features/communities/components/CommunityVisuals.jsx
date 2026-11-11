@@ -30,7 +30,7 @@ export function CommunityAvatar({
   const hasImage = Boolean(community.iconId && failedId !== community.iconId);
   return (
     <div
-      className={`grid shrink-0 place-items-center overflow-hidden font-extrabold text-brand-ink ${hasImage ? "bg-white" : "bg-brand-soft"} ${size} ${text} ${rounded} ${className}`}
+      className={`grid shrink-0 place-items-center overflow-hidden font-extrabold text-brand-ink ${hasImage ? "bg-surface dark:bg-raised ring-1 ring-inset ring-line" : "bg-brand-soft"} ${size} ${text} ${rounded} ${className}`}
     >
       {hasImage ? (
         <img
