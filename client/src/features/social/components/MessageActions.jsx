@@ -142,7 +142,7 @@ export function MessageActions({ message, currentUserId, isMine, quickEmoji, can
   return <>
     <div ref={rootRef} className={`absolute top-0 z-30 ${isMine ? "right-0" : "left-0"}`}>
       <button type="button" title="Message actions" aria-label="Show message reactions and actions" aria-expanded={touchOpen} onClick={() => setTouchOpen((open) => !open)} className="sr-only focus:not-sr-only focus:absolute focus:right-0 focus:top-0 focus:z-40 focus:grid focus:size-9 focus:place-items-center focus:rounded-full focus:bg-surface"><SmilePlus size={17}/></button>
-      <div role="toolbar" aria-label="Message reactions and actions" className={`${toolbarStyle} absolute top-0 flex max-w-[calc(100vw-1rem)] ${isMine ? "right-0" : "left-0"} pointer-events-none opacity-0 [@media(hover:none)]:hidden [@media(hover:hover)]:group-hover/message:pointer-events-auto [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:group-focus-within/message:pointer-events-auto [@media(hover:hover)]:group-focus-within/message:opacity-100`}>
+      <div role="toolbar" aria-label="Message reactions and actions" className={`${toolbarStyle} absolute top-0 flex max-w-[calc(100vw-1rem)] ${isMine ? "right-0" : "left-0"} pointer-events-none opacity-0 [@media(hover:none)]:hidden [@media(hover:hover)]:group-hover/bubble:pointer-events-auto [@media(hover:hover)]:group-hover/bubble:opacity-100 [@media(hover:hover)]:group-focus-within/bubble:pointer-events-auto [@media(hover:hover)]:group-focus-within/bubble:opacity-100`}>
         {toolbar(false)}
       </div>
     </div>

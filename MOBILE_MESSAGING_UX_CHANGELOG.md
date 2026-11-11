@@ -1,28 +1,37 @@
-# Aevora mobile messaging UX updates
+# Aevora mobile messaging UX: follow-up revision (November 11, 2026)
 
-This package updates the existing Vite/React app. Server APIs and persistence are unchanged.
+This is a code update to the existing React/Vite Aevora project. Messaging APIs, existing data models, and persistence logic are not changed.
 
-## Changes
+## Fixes in this revision
 
-- The mobile tab bar is now available from the feed, full-screen Messages and Communities. Tabs: Home, Communities, Create, Messages and More. The More menu exposes Explore, Friends, Short videos, Subscriptions, Gaming, Profile, Privacy & Safety, Settings, Company, Calendar, Tasks and Help, plus the theme selector.
-- Opening a conversation scrolls to the newest message after virtual rows mount. An initial two-frame correction and resize anchoring handle delayed media measurements. Scrolling up does not force the reader back down; a Latest messages button returns to the bottom.
-- Emoji, GIF and reaction popovers are placed through portals and clamped to the current visual viewport, taking mobile virtual keyboards into account.
-- Reaction controls no longer show a persistent floating smiley on touch devices. Tap or long-press a bubble, or use keyboard focus, to show them.
-- Message media-only bubbles now use a narrow neutral frame instead of heavy blue padding. Timestamps sit below the bubble, in higher contrast text; bubble spacing is tighter.
-- Chat header has a padded 40px back target, consistent outline icons, and an online dot when presence is visible. Global appearance controls are available from More instead of a floating moon on the mobile Messages header.
-- Composer now has a full-width text entry row and a separated 44px icon/action row. Its input border has stronger contrast and its send button is no larger than other primary actions.
-- Voice chat dock is shifted above mobile navigation in Communities.
+1. **Theme control restored:** The Messages page header always shows the light/dark theme toggle. On mobile, a compact menu in the same header gives access to Home, Communities, Messages, Explore, and all additional routes. The notification bell remains on tablet/desktop widths.
+2. **No bottom navigation on Messages:** The mobile tab bar is not mounted under the conversation or inbox view. The Communities and home layouts retain their existing mobile navigation. The header menu is the mobile escape route from an open conversation.
+3. **Reactions belong to the message bubble:** On touch devices, tap or press-and-hold the actual bubble to open its message reaction/actions toolbar. Tapping timestamps, delivery receipts, avatar, whitespace, or the rest of the message row no longer opens the toolbar. The desktop hover target is also limited to the bubble rather than the whole row. Reaction and emoji popovers continue to use the visible viewport for positioning.
+4. **One-row chat composer:** One expandable `+` button on the left opens Attach, GIF, and Emoji. The text area sits in the middle. The selected conversation's default quick emoji/sticker is the only right-side button when there is no draft or attachment. As soon as there is typing or an attachment, it is replaced by Send. During editing it becomes Save. The tools and pickers close on outside tap or Escape; emoji and GIF overlays remain anchored to the always-visible `+` button.
+5. **Previously delivered improvements retained:** New chats scroll to the most recent message, the Latest messages shortcut is available if scrolled up, image bubbles use a slim border, and text/timestamp contrast and touch targets remain improved.
 
-## Tests
+## Files changed in this revision
 
-Run static/logic smoke tests without external packages:
+- `client/src/layouts/MessageLayout.jsx`
+- `client/src/layouts/main/MessageNavigationMenu.jsx` (new)
+- `client/src/features/social/messaging/ChatMessage.jsx`
+- `client/src/features/social/components/MessageActions.jsx`
+- `client/src/features/social/messaging/ChatComposer.jsx`
+- `client/test/mobileMessagingUx.test.mjs` (updated)
+- `MOBILE_MESSAGING_UX_CHANGELOG.md`
+
+## Checks completed
+
+Run the project regression smoke checks:
 
 ```bash
 cd aevora/client
 node --test test/mobileMessagingUx.test.mjs
 ```
 
-For the full integration check on your development machine (with npm dependencies and a supported Node release):
+Result: 7/7 passed. All source JSX/JavaScript files and local relative imports were also parsed/checked (140 source files and 349 imports; no parser errors or missing relative imports).
+
+**Full Vite production build is not verified in this environment.** The offline dependency install could not complete because the npm cache did not contain every package (first failure: `zustand-5.1.0.tgz`). On a development machine with network access, use a recent compatible Node 22 release and run:
 
 ```bash
 cd aevora/client
@@ -31,6 +40,11 @@ npm run build
 npm run dev
 ```
 
-Then test at narrow widths (320px, 375px, 390px): open /messages, select a conversation, confirm it opens at the last message, scroll up, return to Latest, open an emoji picker while the keyboard is up, tap and long-press message bubbles, open GIFs and navigate through Communities and More. Check both light/dark themes and voice chat if used.
+Manual mobile QA at 320px, 375px, and 390px:
 
-Note: placeholder routes such as Gaming, Company, Calendar and Tasks retain their pre-existing placeholder pages; this update exposes navigation to them but does not implement those features.
+- Verify the moon/sun appearance button works and the header menu can navigate to Communities and back.
+- Confirm that the bottom nav is absent from `/messages` and `/messages/:id`.
+- Verify clicking the timestamp/blank message row does nothing, while tapping or long-pressing the message bubble opens reactions.
+- Confirm sticker appears alone for empty draft; typing swaps it for Send; clearing swaps it back; selecting a file shows Send.
+- Expand the `+` button, test file/GIF/emoji tools, and open the emoji picker while the keyboard is showing.
+- Verify the latest-message scroll behavior and desktop hover reactions after refreshing.

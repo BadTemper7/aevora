@@ -5,16 +5,18 @@ import { messagesInChronologicalOrder, mergeMessage } from "../src/features/soci
 
 const source = (relative) => readFileSync(new URL(`../src/${relative}`, import.meta.url), "utf8");
 
-test("Mobile tab navigation includes Communities and an accessible More menu", () => {
-  const nav = source("layouts/main/MobileNav.jsx");
-  assert.match(nav, /label: "Communities", path: ROUTES\.communities/);
-  assert.match(nav, /label: "More", action: "more"/);
-  assert.match(nav, /MORE_NAV\.map/);
-  assert.match(nav, /aria-expanded=\{moreOpen\}/);
+test("Communities and other app pages are accessible from the messenger header", () => {
+  const layout = source("layouts/MessageLayout.jsx");
+  const menu = source("layouts/main/MessageNavigationMenu.jsx");
+  assert.match(layout, /<MessageNavigationMenu\s*\/>/);
+  assert.match(menu, /label: "Communities", path: ROUTES\.communities/);
+  assert.match(menu, /MORE_NAV\.filter/);
+  assert.match(menu, /aria-expanded=\{open\}/);
+  assert.match(layout, /<ThemeToggle\s*\/>/);
 });
 
-test("Mobile navigation remains available inside full-screen chats and communities", () => {
-  assert.match(source("layouts/MessageLayout.jsx"), /<MobileNav docked\s*\/>/);
+test("Messenger has no bottom tab navigation, while Communities retains its tabs", () => {
+  assert.doesNotMatch(source("layouts/MessageLayout.jsx"), /<MobileNav/);
   assert.match(source("layouts/CommunityLayout.jsx"), /<MobileNav docked\s*\/>/);
 });
 
@@ -27,23 +29,44 @@ test("Chat starts at its most recent message and offers a Latest shortcut", () =
   assert.match(page, /ResizeObserver/);
 });
 
-test("Emoji, GIF and tap-to-react popovers are attached to the visual viewport", () => {
-  const emoji = source("components/common/EmojiPicker.jsx");
-  const gif = source("features/social/messaging/GifPicker.jsx");
-  const reactions = source("features/social/components/MessageActions.jsx");
-  for (const component of [emoji, gif, reactions]) {
+test("Mobile reactions open from a tapped or held bubble, not the entire message row", () => {
+  const message = source("features/social/messaging/ChatMessage.jsx");
+  const actions = source("features/social/components/MessageActions.jsx");
+  const article = message.slice(message.indexOf("return <article"), message.indexOf("data-message-bubble"));
+  const bubble = message.slice(message.indexOf("data-message-bubble"), message.indexOf("{message.replyTo &&"));
+  assert.doesNotMatch(article, /onTouchStart=|onClick=\{revealTouchActions\}/);
+  assert.match(bubble, /onTouchStart=\{startPress\}/);
+  assert.match(bubble, /onClick=\{revealTouchActions\}/);
+  assert.match(message, /longPressFired/);
+  assert.match(message, /window\.matchMedia\?\.\("\(hover: none\)"\)/);
+  assert.match(actions, /group-hover\/bubble/);
+  assert.match(actions, /\[@media\(hover:none\)\]:hidden/);
+});
+
+test("Emoji, GIF, and reaction popovers are positioned inside the visual viewport", () => {
+  for (const file of [
+    "components/common/EmojiPicker.jsx",
+    "features/social/messaging/GifPicker.jsx",
+    "features/social/components/MessageActions.jsx",
+  ]) {
+    const component = source(file);
     assert.match(component, /visualViewport/);
     assert.match(component, /createPortal/);
   }
-  assert.match(source("features/social/messaging/ChatMessage.jsx"), /onTouchStart=\{startPress\}/);
-  assert.match(source("features/social/messaging/ChatMessage.jsx"), /onClick=\{revealTouchActions\}/);
 });
 
-test("Media bubbles use a slim neutral border and composer buttons have 44px targets", () => {
-  assert.match(source("features/social/messaging/ChatMessage.jsx"), /isMediaOnly \? "border border-line bg-surface p-1/);
+test("Composer places a single attachment menu, input, and sticker/send in one row", () => {
   const composer = source("features/social/messaging/ChatComposer.jsx");
-  assert.match(composer, /className="grid size-11/);
+  assert.match(composer, /data-message-composer-row/);
+  assert.match(composer, /data-composer-tools/);
+  assert.match(composer, /Open attachment tools/);
+  assert.match(composer, /aria-label="Attach file"/);
+  assert.match(composer, /aria-label="Open GIF picker"/);
+  assert.match(composer, /aria-label="Insert emoji"/);
+  assert.match(composer, /\{showQuickEmoji \? <button data-composer-sticker/);
+  assert.match(composer, /: <button data-composer-send/);
   assert.match(composer, /!border-line-strong/);
+  assert.match(composer, /size-11/);
 });
 
 test("Message ordering is chronological regardless of backend page order", () => {

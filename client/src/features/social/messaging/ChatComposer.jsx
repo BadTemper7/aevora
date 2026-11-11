@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, FileText, FileUp, LoaderCircle, Play, Send, Smile, X } from "lucide-react";
+import { Check, FileText, FileUp, LoaderCircle, Play, Plus, Send, Smile, X } from "lucide-react";
 import EmojiPicker from "../../../components/common/EmojiPicker";
 import { errorText, remove, uploadMedia, waitForMedia } from "../api/socialApi";
 import { field } from "../components/SocialUI";
@@ -11,8 +11,8 @@ import { ATTACHMENT_ACCEPT, attachmentKind, formatFileSize, messageKindFor, vali
 export default function ChatComposer({ text, setText, media, setMedia, reply, cancelReply, editing, cancelEditing, onSubmit, onSendStart, onSendProgress, onSendFailure, onGif, onTyping, onQuickEmoji, quickEmoji = "👍", busy, disabled, mediaPurpose = "message" }) {
   const input = useRef(null);
   const fileInput = useRef(null);
-  const emojiAnchor = useRef(null);
-  const gifAnchor = useRef(null);
+  const toolsAnchor = useRef(null);
+  const toolsRoot = useRef(null);
   const controller = useRef(null);
   const running = useRef(false);
   const activeId = useRef(null);
@@ -21,6 +21,7 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
   const queuedRef = useRef([]);
   const [queued, setQueued] = useState([]);
   const [previewKey, setPreviewKey] = useState(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -43,6 +44,24 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
     document.addEventListener("keydown", onEscape);
     return () => document.removeEventListener("keydown", onEscape);
   }, [previewKey]);
+  useEffect(() => {
+    if (!toolsOpen) return undefined;
+    const onOutside = (event) => {
+      if (!toolsRoot.current?.contains(event.target)) setToolsOpen(false);
+    };
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        setToolsOpen(false);
+        toolsAnchor.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onOutside);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("pointerdown", onOutside);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [toolsOpen]);
   useLayoutEffect(() => {
     const box = input.current;
     if (!box) return;
@@ -99,7 +118,7 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
     onSendProgress?.({ clientId, stage, percent: progress, fileName: item.file.name });
   };
   const valid = Boolean(text.trim() || (queued.length && !editing) || (media && !editing));
-  const showQuickEmoji = !editing && !text.trim() && !queued.length && !media;
+  const showQuickEmoji = !editing && !sending && !busy && !text.length && !queued.length && !media;
   const cancelTransfer = () => { controller.current?.abort(); setNotice("Upload canceled. Your attachments are still in the composer."); };
 
   const send = async (event) => {
@@ -149,6 +168,7 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
       setQueued([]);
       setPreviewKey(null);
       setText("");
+      setToolsOpen(false);
       setMedia?.(null);
       if (!isEdit) cancelReply?.();
       activeId.current = null;
@@ -178,33 +198,51 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
         <div className="space-y-0.5 px-2 py-1"><p title={item.file.name} className="truncate text-[11px] font-semibold">{item.file.name}</p><p className="text-[10px] text-ink-faint">{formatFileSize(item.file.size)}{item.stage !== "selected" ? ` · ${item.stage}` : ""}</p>{["uploading", "processing", "optimizing"].includes(item.stage) && <div className="h-1 overflow-hidden rounded-full bg-line"><div className="h-full bg-brand" style={{ width: `${Math.max(5, item.percent)}%` }}/></div>}</div>
       </div>)}</div>
     </div>}
-    <div className="space-y-2">
+    <div className="flex min-w-0 items-end gap-2" data-message-composer-row>
+      <div ref={toolsRoot} className="relative shrink-0">
+        <input ref={fileInput} type="file" className="sr-only" multiple accept={ATTACHMENT_ACCEPT} aria-label="Choose message attachments"
+          onChange={(event) => { addFiles(event.target.files); setToolsOpen(false); }} disabled={Boolean(editing || sending || busy || disabled)}/>
+        <button ref={toolsAnchor} type="button" aria-label={toolsOpen ? "Close attachment tools" : "Open attachment tools"}
+          title="Attachments, GIFs and emojis" aria-expanded={toolsOpen} aria-controls="chat-composer-tools" disabled={sending || busy || disabled}
+          onClick={() => { setToolsOpen((open) => !open); setGifOpen(false); setEmojiOpen(false); }}
+          className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised hover:text-ink disabled:opacity-50">
+          <Plus size={23} className={`transition-transform ${toolsOpen ? "rotate-45" : ""}`}/>
+        </button>
+        {toolsOpen && <div id="chat-composer-tools" role="group" aria-label="Message tools" data-composer-tools
+          className="absolute bottom-full left-0 z-40 mb-2 flex items-center gap-1.5 rounded-2xl border border-line bg-surface p-2 shadow-xl">
+          <button type="button" disabled={Boolean(editing || sending || busy || disabled)} title="Attach file" aria-label="Attach file"
+            className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised hover:text-ink disabled:opacity-50"
+            onClick={() => fileInput.current?.click()}><FileUp size={19}/></button>
+          <button type="button" disabled={Boolean(editing || sending || busy || disabled)} title="Send a GIF" aria-label="Open GIF picker"
+            className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised hover:text-ink disabled:opacity-50"
+            onClick={() => { setGifOpen(true); setEmojiOpen(false); setToolsOpen(false); }}><span className="text-xs font-extrabold">GIF</span></button>
+          <button type="button" title="Insert emoji" aria-label="Insert emoji" disabled={sending || busy || disabled}
+            className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised hover:text-ink disabled:opacity-50"
+            onClick={() => { setEmojiOpen(true); setGifOpen(false); setToolsOpen(false); }}><Smile size={19}/></button>
+        </div>}
+        {gifOpen && <GifPicker anchorRef={toolsAnchor} onSelect={(gif) => { onGif(gif); setGifOpen(false); }} onClose={() => setGifOpen(false)} busy={sending || busy}/>}
+        <EmojiPicker open={emojiOpen} anchorRef={toolsAnchor} onClose={() => setEmojiOpen(false)} onSelect={(emoji) => {
+          setText((current) => `${current}${emoji}`); setEmojiOpen(false); input.current?.focus();
+        }}/>
+      </div>
       <textarea ref={input} id="chat-composer" rows={1} maxLength={5000} disabled={sending || busy || disabled}
-        value={text} onChange={(event) => { setText(event.target.value); if (!editing) onTyping?.(Boolean(event.target.value)); }}
+        value={text} onChange={(event) => { setText(event.target.value); setToolsOpen(false); if (!editing) onTyping?.(Boolean(event.target.value)); }}
         onKeyDown={(event) => {
           if (event.key === "Escape" && editing) { event.preventDefault(); cancelEditing(); }
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent?.isComposing) { event.preventDefault(); void send(); }
         }}
         placeholder={editing ? "Update your message..." : "Write a message..."}
         aria-label={editing ? "Edit message" : "Message text"}
-        className={`${field} block min-h-11 min-w-0 !resize-none !border-line-strong !bg-canvas !py-2.5 leading-6`}
+        className={`${field} block min-h-11 min-w-0 flex-1 !resize-none !border-line-strong !bg-canvas !py-2.5 leading-6`}
         style={{ resize: "none", height: 44, maxHeight: 140, overflowY: "hidden", boxSizing: "border-box" }}/>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <input ref={fileInput} type="file" className="sr-only" multiple accept={ATTACHMENT_ACCEPT} aria-label="Choose message attachments" onChange={(event) => addFiles(event.target.files)} disabled={Boolean(editing || sending || busy || disabled)}/>
-          <button type="button" disabled={Boolean(editing || sending || busy || disabled)} title="Attach images, videos or files" aria-label="Attach images, videos or files" className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised disabled:opacity-50" onClick={() => fileInput.current?.click()}><FileUp size={20}/></button>
-          <button ref={gifAnchor} type="button" disabled={sending || busy || editing} aria-expanded={gifOpen} title="Send a GIF" aria-label="Open GIF picker" className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised disabled:opacity-50" onClick={() => { setGifOpen((v) => !v); setEmojiOpen(false); }}><span className="text-xs font-extrabold">GIF</span></button>
-          {gifOpen && <GifPicker anchorRef={gifAnchor} onSelect={(gif) => { onGif(gif); setGifOpen(false); }} onClose={() => setGifOpen(false)} busy={sending || busy}/>}
-          <button ref={emojiAnchor} type="button" title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised" onClick={() => { setEmojiOpen((v) => !v); setGifOpen(false); }}><Smile size={20}/></button>
-          <EmojiPicker open={emojiOpen} anchorRef={emojiAnchor} onClose={() => setEmojiOpen(false)} onSelect={(emoji) => { setText((s) => `${s}${emoji}`); setEmojiOpen(false); input.current?.focus(); }}/>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {showQuickEmoji && <button title={`Send ${quickEmoji}`} aria-label={`Send quick emoji ${quickEmoji}`} type="button" onClick={onQuickEmoji} disabled={sending || busy || disabled} className="grid size-11 place-items-center rounded-xl bg-brand-soft text-2xl text-brand-ink hover:brightness-95 disabled:opacity-50">{quickEmoji}</button>}
-          <button title={editing ? "Save changes" : "Send message"} aria-label={editing ? "Save message changes" : "Send message"} type="submit" disabled={sending || busy || disabled || !valid} className="grid size-11 place-items-center rounded-xl bg-brand text-on-brand hover:bg-brand-hover disabled:opacity-50">
-            {sending || busy ? <LoaderCircle size={20} className="animate-spin"/> : editing ? <Check size={20}/> : <Send size={20}/>}<span className="sr-only">{editing ? "Save changes" : "Send"}</span>
-          </button>
-        </div>
-      </div>
+      {showQuickEmoji ? <button data-composer-sticker title={`Send ${quickEmoji}`} aria-label={`Send quick emoji ${quickEmoji}`}
+        type="button" onClick={onQuickEmoji} disabled={disabled}
+        className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft text-2xl text-brand-ink hover:brightness-95 disabled:opacity-50">{quickEmoji}</button>
+        : <button data-composer-send title={editing ? "Save changes" : "Send message"} aria-label={editing ? "Save message changes" : "Send message"}
+          type="submit" disabled={sending || busy || disabled || !valid}
+          className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand text-on-brand hover:bg-brand-hover disabled:opacity-50">
+          {sending || busy ? <LoaderCircle size={20} className="animate-spin"/> : editing ? <Check size={20}/> : <Send size={20}/>}<span className="sr-only">{editing ? "Save changes" : "Send"}</span>
+        </button>}
     </div>
     {sending && <div role="status" className="flex items-center justify-between gap-2 text-xs text-ink-soft"><span className="flex items-center gap-1.5"><LoaderCircle className="size-3.5 animate-spin"/> {queued.some((item) => item.stage === "processing") ? "Processing and optimizing attachments..." : queued.some((item) => item.stage === "uploading") ? "Uploading attachments..." : "Sending message..."}</span>{queued.length > 0 && <button type="button" className="underline" onClick={cancelTransfer}>Cancel upload</button>}</div>}
     {notice && <p role="alert" className="text-xs text-danger">{notice}</p>}
