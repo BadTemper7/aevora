@@ -1,0 +1,96 @@
+/*
+ * Aevora design tokens.
+ * Colours live in CSS variables so light/dark can swap at runtime
+ * (ThemeProvider sets <html data-theme="light|dark">).
+ * Tailwind utilities (bg-surface, text-ink, border-line …) read from them.
+ */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --av-canvas: #f3f5fb;
+  --av-surface: #ffffff;
+  --av-raised: #ebeef8;
+  --av-line: #dce1ef;
+  --av-line-strong: #c3cbe0;
+
+  --av-ink: #0b1020;
+  --av-ink-soft: #54607e;
+  --av-ink-faint: #5f6985;
+
+  --av-brand: #2f55e0;
+  --av-brand-hover: #2646c4;
+  --av-brand-ink: #2b4fd6;
+  --av-brand-soft: rgb(47 85 224 / 0.1);
+  --av-on-brand: #ffffff;
+  --av-violet: #7440e8;
+
+  --av-danger: #c42b43;
+  --av-danger-soft: rgb(196 43 67 / 0.08);
+  --av-warning: #965f00;
+  --av-success: #0f7a56;
+
+  --av-shadow-pop: 0 10px 32px rgb(11 16 32 / 0.14), 0 2px 6px rgb(11 16 32 / 0.06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --av-canvas: #080b14;
+  --av-surface: #0e1322;
+  --av-raised: #151b30;
+  --av-line: #222a44;
+  --av-line-strong: #333d60;
+
+  --av-ink: #edf0fa;
+  --av-ink-soft: #98a2bd;
+  --av-ink-faint: #7a84a0;
+
+  --av-brand: #3f68f5;
+  --av-brand-hover: #5478ff;
+  --av-brand-ink: #86a2ff;
+  --av-brand-soft: rgb(110 142 255 / 0.14);
+  --av-on-brand: #ffffff;
+  --av-violet: #a47bff;
+
+  --av-danger: #ff7a88;
+  --av-danger-soft: rgb(255 122 136 / 0.1);
+  --av-warning: #f5b642;
+  --av-success: #3ddc97;
+
+  --av-shadow-pop: 0 14px 40px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+/* Map the variables to Tailwind utilities. `inline` keeps them live. */
+@theme inline {
+  --color-canvas: var(--av-canvas);
+  --color-surface: var(--av-surface);
+  --color-raised: var(--av-raised);
+  --color-line: var(--av-line);
+  --color-line-strong: var(--av-line-strong);
+
+  --color-ink: var(--av-ink);
+  --color-ink-soft: var(--av-ink-soft);
+  --color-ink-faint: var(--av-ink-faint);
+
+  --color-brand: var(--av-brand);
+  --color-brand-hover: var(--av-brand-hover);
+  --color-brand-ink: var(--av-brand-ink);
+  --color-brand-soft: var(--av-brand-soft);
+  --color-on-brand: var(--av-on-brand);
+  --color-violet: var(--av-violet);
+
+  --color-danger: var(--av-danger);
+  --color-danger-soft: var(--av-danger-soft);
+  --color-warning: var(--av-warning);
+  --color-success: var(--av-success);
+
+  --shadow-pop: var(--av-shadow-pop);
+
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Michroma", "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Lets `dark:` utilities follow the data-theme attribute too. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

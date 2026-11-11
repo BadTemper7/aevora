@@ -1,0 +1,52 @@
+# One-origin free preview deployment. It is not a full production media host:
+# ClamAV daemon is not available in Render's 512MB free container,
+# so production uploads intentionally fail closed until a scanner is supplied.
+services:
+  - type: web
+    name: aevora-preview
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '10000'
+      - key: STORAGE_PROVIDER
+        value: imagekit
+      - key: IMAGEKIT_CLEANUP_ENABLED
+        value: 'false'
+      - key: VIDEO_WORKER_CONCURRENCY
+        value: '1'
+      - key: VIDEO_MAX_HEIGHT
+        value: '720'
+      - key: MAX_VIDEO_MB
+        value: '25'
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: VITE_GIPHY_API_KEY
+        sync: false

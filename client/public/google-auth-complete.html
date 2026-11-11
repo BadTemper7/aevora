@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Finishing Google sign-in - Aevora</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #101627; color: #fff; }
+      main { padding: 36px 24px; max-width: 360px; text-align: center; }
+      .spinner { width: 32px; height: 32px; border: 3px solid #4a5874; border-top-color: #7c9bff; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 20px; }
+      p { color: #c1c9dc; line-height: 1.6; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <main role="status" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 id="title">Finishing sign-in...</h2>
+      <p id="message">Aevora is verifying your Google account.</p>
+    </main>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var flow = params.get("flow");
+        var oauthError = params.get("error") || params.get("oauth_error");
+        var title = document.getElementById("title");
+        var message = document.getElementById("message");
+        var payload = {
+          type: "aevora:google-auth-result",
+          flow: flow,
+          status: oauthError ? "error" : "success",
+          error: oauthError ? "Google sign-in did not complete. Please try again." : null
+        };
+
+        if (!flow) {
+          title.textContent = "Cannot finish sign-in";
+          message.textContent = "The sign-in request is missing. Close this window and start again from Aevora.";
+          return;
+        }
+
+        // Google may sever window.opener with a cross-origin opener policy.
+        // BroadcastChannel and storage events still work once back on localhost.
+        try { if (window.opener) window.opener.postMessage(payload, window.location.origin); } catch (_) {}
+        try {
+          if (typeof BroadcastChannel !== "undefined") {
+            var channel = new BroadcastChannel("aevora-google-auth");
+            channel.postMessage(payload);
+            channel.close();
+          }
+        } catch (_) {}
+        try { localStorage.setItem("aevora:google-auth:" + flow, JSON.stringify(payload)); } catch (_) {}
+
+        title.textContent = oauthError ? "Google sign-in failed" : "Google sign-in complete";
+        message.textContent = oauthError
+          ? "Return to Aevora and try again. You can close this window."
+          : "You can return to Aevora. This window will close automatically.";
+        if (!oauthError) setTimeout(function () { window.close(); }, 600);
+      }());
+    </script>
+  </body>
+</html>

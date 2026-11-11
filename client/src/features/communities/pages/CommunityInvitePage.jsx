@@ -1,0 +1,12 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link,useNavigate,useParams } from 'react-router-dom';
+import { LoaderCircle,ShieldCheck,UsersRound } from 'lucide-react';
+import { communityRead,communityCreate,communityError } from '../api/communityApi';
+import { ErrorNotice,Loading } from '../../social/components/SocialUI';
+export default function CommunityInvitePage(){
+  const {token}=useParams(),navigate=useNavigate();const [accepted,setAccepted]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const query=useQuery({queryKey:['community','invite',token],queryFn:()=>communityRead(`/communities/invite/${token}`),retry:false});
+  const join=async()=>{setBusy(true);setError('');try{const r=await communityCreate(`/communities/invite/${token}/accept`,{rulesAccepted:accepted});if(r.status==='active')navigate(`/communities/${r.community.id}`);else navigate('/communities');}catch(err){setError(communityError(err));}finally{setBusy(false);}};
+  return <div className="mx-auto w-full max-w-2xl overflow-y-auto p-5 sm:p-10"><Link to="/communities" className="text-sm font-semibold text-brand-ink">← Communities</Link>{query.isLoading?<Loading label="Checking invitation..."/>:query.isError?<ErrorNotice error={query.error}/>:<div className="mt-6 space-y-4 rounded-2xl border border-line bg-surface p-6"><UsersRound size={32} className="text-brand-ink"/><h1 className="text-2xl font-extrabold">Join {query.data.community.name}</h1><p className="text-sm text-ink-soft">{query.data.community.description}</p><p className="text-xs text-ink-soft">{query.data.community.memberCount} members · {query.data.community.visibility}</p>{query.data.community.rules&&<div className="space-y-2 rounded-xl bg-raised p-4"><p className="text-sm font-bold">Community rules</p><p className="whitespace-pre-wrap text-sm text-ink-soft">{query.data.community.rules}</p><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/>I agree to the rules</label></div>}{error&&<ErrorNotice error={error}/>}<button onClick={join} disabled={busy||Boolean(query.data.community.rules&&!accepted)} className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-bold text-on-brand disabled:opacity-50">{busy?<LoaderCircle size={18} className="animate-spin"/>:<ShieldCheck size={18}/>}Accept invitation</button></div>}</div>;
+}

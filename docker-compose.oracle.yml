@@ -1,0 +1,50 @@
+# Run on an Oracle Ampere A1 Always Free VM (2 OCPU, up to 12 GB RAM).
+# Database, images, and video are still external Atlas/ImageKit/LiveKit services.
+services:
+  aevora:
+    build:
+      context: .
+      args:
+        VITE_GIPHY_API_KEY: ${VITE_GIPHY_API_KEY:-}
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: '10000'
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+      CLAMAV_COMMAND: /app/server/deploy/clamdscan-remote.sh
+    depends_on:
+      - clamav
+    restart: unless-stopped
+    volumes:
+      - aevora-staging:/app/server/storage
+    expose:
+      - '10000'
+
+  clamav:
+    image: clamav/clamav-debian:stable
+    restart: unless-stopped
+    volumes:
+      - clamav-database:/var/lib/clamav
+    expose:
+      - '3310'
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - aevora
+
+volumes:
+  aevora-staging:
+  clamav-database:
+  caddy-data:
+  caddy-config:

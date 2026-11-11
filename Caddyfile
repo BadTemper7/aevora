@@ -1,0 +1,6 @@
+# Replace this hostname with a DNS name pointing to your Oracle VM public IPv4.
+# Caddy automatically obtains HTTPS certificates after DNS and ports are ready.
+aevora-yourname.duckdns.org {
+    encode gzip zstd
+    reverse_proxy aevora:10000
+}
