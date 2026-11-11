@@ -12,8 +12,7 @@
     "test:social": "node --test test/socialRegression.test.mjs test/messageReactions.test.mjs test/messageDelivery.test.mjs",
     "test:messaging": "node --test test/messagingUx.test.mjs test/giphyClient.test.mjs test/attachmentComposer.test.mjs",
     "test:communities": "node --test test/communityContracts.test.mjs",
-    "test:notifications": "node --test test/notificationDropdown.test.mjs test/socialRegression.test.mjs",
-    "test:mobile": "node --test test/mobileCommunication.test.mjs test/storyTimeline.test.mjs"
+    "test:notifications": "node --test test/notificationDropdown.test.mjs test/socialRegression.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, FileText, FileUp, LoaderCircle, Play, Send, Smile, X } from "lucide-react";
 import EmojiPicker from "../../../components/common/EmojiPicker";
 import { errorText, remove, uploadMedia, waitForMedia } from "../api/socialApi";
-import { field, smallButton } from "../components/SocialUI";
+import { field } from "../components/SocialUI";
 import GifPicker from "./GifPicker";
 import { ATTACHMENT_ACCEPT, attachmentKind, formatFileSize, messageKindFor, validateAttachment } from "./attachmentRules";
 
@@ -12,6 +12,7 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
   const input = useRef(null);
   const fileInput = useRef(null);
   const emojiAnchor = useRef(null);
+  const gifAnchor = useRef(null);
   const controller = useRef(null);
   const running = useRef(false);
   const activeId = useRef(null);
@@ -162,7 +163,7 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
   };
 
   const activePreview = queued.find((entry) => entry.key === previewKey);
-  return <form className="shrink-0 min-w-0 space-y-2 border-t border-line bg-surface p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-3" onSubmit={send} aria-label="Message composer"
+  return <form className="shrink-0 space-y-2 border-t border-line bg-surface px-3 py-2 sm:p-3" onSubmit={send} aria-label="Message composer"
     onDragOver={(event) => { if (event.dataTransfer?.types?.includes("Files")) event.preventDefault(); }}
     onDrop={(event) => { if (event.dataTransfer?.files?.length) { event.preventDefault(); addFiles(event.dataTransfer.files); } }}
     onPaste={(event) => { if (event.clipboardData?.files?.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }}>
@@ -177,7 +178,7 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
         <div className="space-y-0.5 px-2 py-1"><p title={item.file.name} className="truncate text-[11px] font-semibold">{item.file.name}</p><p className="text-[10px] text-ink-faint">{formatFileSize(item.file.size)}{item.stage !== "selected" ? ` · ${item.stage}` : ""}</p>{["uploading", "processing", "optimizing"].includes(item.stage) && <div className="h-1 overflow-hidden rounded-full bg-line"><div className="h-full bg-brand" style={{ width: `${Math.max(5, item.percent)}%` }}/></div>}</div>
       </div>)}</div>
     </div>}
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-nowrap sm:items-end sm:gap-2">
+    <div className="space-y-2">
       <textarea ref={input} id="chat-composer" rows={1} maxLength={5000} disabled={sending || busy || disabled}
         value={text} onChange={(event) => { setText(event.target.value); if (!editing) onTyping?.(Boolean(event.target.value)); }}
         onKeyDown={(event) => {
@@ -186,16 +187,24 @@ export default function ChatComposer({ text, setText, media, setMedia, reply, ca
         }}
         placeholder={editing ? "Update your message..." : "Write a message..."}
         aria-label={editing ? "Edit message" : "Message text"}
-        className={`${field} order-1 min-h-11 w-full min-w-0 flex-none !resize-none !py-2.5 leading-6 sm:order-4 sm:w-auto sm:flex-1`}
+        className={`${field} block min-h-11 min-w-0 !resize-none !border-line-strong !bg-canvas !py-2.5 leading-6`}
         style={{ resize: "none", height: 44, maxHeight: 140, overflowY: "hidden", boxSizing: "border-box" }}/>
-      <input ref={fileInput} type="file" className="sr-only" multiple accept={ATTACHMENT_ACCEPT} aria-label="Choose message attachments" onChange={(event) => addFiles(event.target.files)} disabled={Boolean(editing || sending || busy || disabled)}/>
-      <button type="button" disabled={Boolean(editing || sending || busy || disabled)} title="Attach images, videos or files" aria-label="Attach images, videos or files" className={`${smallButton} order-2 shrink-0`} onClick={() => fileInput.current?.click()}><FileUp size={18}/></button>
-      <div className="relative order-3 shrink-0"><button type="button" disabled={sending || busy || editing} aria-expanded={gifOpen} title="Send a GIF" aria-label="Open GIF picker" className={smallButton} onClick={() => { setGifOpen((v) => !v); setEmojiOpen(false); }}><span className="text-xs font-extrabold">GIF</span></button>{gifOpen && <GifPicker onSelect={(gif) => { onGif(gif); setGifOpen(false); }} onClose={() => setGifOpen(false)} busy={sending || busy}/>}</div>
-      <div className="relative order-4 shrink-0 sm:order-3"><button ref={emojiAnchor} type="button" title="Insert emoji" aria-label="Insert emoji" className={smallButton} onClick={() => { setEmojiOpen((v) => !v); setGifOpen(false); }}><Smile size={18}/></button><EmojiPicker open={emojiOpen} anchorRef={emojiAnchor} onClose={() => setEmojiOpen(false)} onSelect={(emoji) => { setText((s) => `${s}${emoji}`); setEmojiOpen(false); input.current?.focus(); }}/></div>
-      {showQuickEmoji && <button title={`Send ${quickEmoji}`} aria-label={`Send quick emoji ${quickEmoji}`} type="button" onClick={onQuickEmoji} disabled={sending || busy || disabled} className="order-5 ml-auto grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand-ink text-xl hover:brightness-95 disabled:opacity-50 sm:ml-0 sm:size-11 sm:text-2xl">{quickEmoji}</button>}
-      <button title={editing ? "Save changes" : "Send message"} aria-label={editing ? "Save message changes" : "Send message"} type="submit" disabled={sending || busy || disabled || !valid} className={`order-6 grid size-10 shrink-0 place-items-center rounded-xl bg-brand text-on-brand disabled:opacity-50 sm:size-11 ${!showQuickEmoji ? "ml-auto sm:ml-0" : ""}`}>
-        {sending || busy ? <LoaderCircle size={20} className="animate-spin"/> : editing ? <Check size={19}/> : <Send size={19}/>}<span className="sr-only">{editing ? "Save changes" : "Send"}</span>
-      </button>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <input ref={fileInput} type="file" className="sr-only" multiple accept={ATTACHMENT_ACCEPT} aria-label="Choose message attachments" onChange={(event) => addFiles(event.target.files)} disabled={Boolean(editing || sending || busy || disabled)}/>
+          <button type="button" disabled={Boolean(editing || sending || busy || disabled)} title="Attach images, videos or files" aria-label="Attach images, videos or files" className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised disabled:opacity-50" onClick={() => fileInput.current?.click()}><FileUp size={20}/></button>
+          <button ref={gifAnchor} type="button" disabled={sending || busy || editing} aria-expanded={gifOpen} title="Send a GIF" aria-label="Open GIF picker" className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised disabled:opacity-50" onClick={() => { setGifOpen((v) => !v); setEmojiOpen(false); }}><span className="text-xs font-extrabold">GIF</span></button>
+          {gifOpen && <GifPicker anchorRef={gifAnchor} onSelect={(gif) => { onGif(gif); setGifOpen(false); }} onClose={() => setGifOpen(false)} busy={sending || busy}/>}
+          <button ref={emojiAnchor} type="button" title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-raised" onClick={() => { setEmojiOpen((v) => !v); setGifOpen(false); }}><Smile size={20}/></button>
+          <EmojiPicker open={emojiOpen} anchorRef={emojiAnchor} onClose={() => setEmojiOpen(false)} onSelect={(emoji) => { setText((s) => `${s}${emoji}`); setEmojiOpen(false); input.current?.focus(); }}/>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {showQuickEmoji && <button title={`Send ${quickEmoji}`} aria-label={`Send quick emoji ${quickEmoji}`} type="button" onClick={onQuickEmoji} disabled={sending || busy || disabled} className="grid size-11 place-items-center rounded-xl bg-brand-soft text-2xl text-brand-ink hover:brightness-95 disabled:opacity-50">{quickEmoji}</button>}
+          <button title={editing ? "Save changes" : "Send message"} aria-label={editing ? "Save message changes" : "Send message"} type="submit" disabled={sending || busy || disabled || !valid} className="grid size-11 place-items-center rounded-xl bg-brand text-on-brand hover:bg-brand-hover disabled:opacity-50">
+            {sending || busy ? <LoaderCircle size={20} className="animate-spin"/> : editing ? <Check size={20}/> : <Send size={20}/>}<span className="sr-only">{editing ? "Save changes" : "Send"}</span>
+          </button>
+        </div>
+      </div>
     </div>
     {sending && <div role="status" className="flex items-center justify-between gap-2 text-xs text-ink-soft"><span className="flex items-center gap-1.5"><LoaderCircle className="size-3.5 animate-spin"/> {queued.some((item) => item.stage === "processing") ? "Processing and optimizing attachments..." : queued.some((item) => item.stage === "uploading") ? "Uploading attachments..." : "Sending message..."}</span>{queued.length > 0 && <button type="button" className="underline" onClick={cancelTransfer}>Cancel upload</button>}</div>}
     {notice && <p role="alert" className="text-xs text-danger">{notice}</p>}

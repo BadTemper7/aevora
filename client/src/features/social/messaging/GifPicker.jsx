@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, Heart, Search, X } from "lucide-react";
 import { useDebounce } from "../../../hooks/useDebounce";
@@ -15,9 +16,10 @@ const categories = [
   ["mine", "My GIFs"],
 ];
 /** Remote content is requested directly from GIPHY on every browse/search; no GIPHY API response caching. */
-export default function GifPicker({ onSelect, onClose, busy = false }) {
+export default function GifPicker({ onSelect, onClose, anchorRef, busy = false }) {
   const client = useQueryClient();
   const container = useRef(null);
+  const [position, setPosition] = useState({ top: -9999, left: -9999, width: 320, height: 300 });
   const [category, setCategory] = useState("trending");
   const [term, setTerm] = useState("");
   const [notice, setNotice] = useState("");
@@ -110,6 +112,41 @@ export default function GifPicker({ onSelect, onClose, busy = false }) {
       document.removeEventListener("pointerdown", outside);
     };
   }, [onClose]);
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const rect = anchorRef?.current?.getBoundingClientRect();
+      if (!rect) return;
+      const visual = window.visualViewport;
+      const leftEdge = visual?.offsetLeft || 0;
+      const topEdge = visual?.offsetTop || 0;
+      const width = visual?.width || window.innerWidth;
+      const height = visual?.height || window.innerHeight;
+      const margin = 8;
+      const panelWidth = Math.max(180, Math.min(400, width - 2 * margin));
+      const above = rect.top - topEdge;
+      const below = topEdge + height - rect.bottom;
+      const aboveAnchor = above >= below || above >= 390;
+      const space = aboveAnchor ? above : below;
+      const panelHeight = Math.max(140, Math.min(420, space - margin * 2, height - margin * 2));
+      let top = aboveAnchor ? rect.top - panelHeight - margin : rect.bottom + margin;
+      top = Math.max(topEdge + margin, Math.min(top, topEdge + height - panelHeight - margin));
+      const left = Math.max(leftEdge + margin, Math.min(rect.left, leftEdge + width - panelWidth - margin));
+      const next = { top: Math.round(top), left: Math.round(left), width: Math.round(panelWidth), height: Math.round(panelHeight) };
+      setPosition((current) => Object.keys(next).every((key) => current[key] === next[key]) ? current : next);
+    };
+    updatePosition();
+    const visual = window.visualViewport;
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    visual?.addEventListener("resize", updatePosition);
+    visual?.addEventListener("scroll", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      visual?.removeEventListener("resize", updatePosition);
+      visual?.removeEventListener("scroll", updatePosition);
+    };
+  }, [anchorRef]);
   const rawFavorites = Array.isArray(favorites.data) ? favorites.data : [];
   const favoritesById = new Map(
     favoriteResolved.items.map((gif) => [gif.id, gif]),
@@ -177,12 +214,13 @@ export default function GifPicker({ onSelect, onClose, busy = false }) {
       setNotice(errorText(error));
     }
   };
-  return (
+  return createPortal(
     <div
       ref={container}
       role="dialog"
       aria-label="Choose a GIF"
-      className="fixed inset-x-2 bottom-[calc(6.7rem+env(safe-area-inset-bottom))] z-[70] mb-0 flex max-h-[min(60dvh,450px)] w-auto flex-col rounded-3xl sm:absolute sm:inset-auto sm:bottom-full sm:left-0 sm:mb-3 sm:max-h-[min(75vh,540px)] sm:w-[min(400px,calc(100vw-2rem))] border border-line bg-surface p-4 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] ring-1 ring-black/5"
+      style={{ top: position.top, left: position.left, width: position.width, height: position.height, opacity: position.top === -9999 ? 0 : 1 }}
+      className="fixed z-[210] flex flex-col overflow-hidden rounded-2xl border border-line bg-surface p-3 shadow-2xl ring-1 ring-black/5 sm:rounded-3xl sm:p-4"
     >
       <div className="mb-3 flex shrink-0 items-center justify-between">
         <h3 className="text-base font-bold tracking-tight text-ink">
@@ -250,7 +288,7 @@ export default function GifPicker({ onSelect, onClose, busy = false }) {
         </p>
       )}
       <div
-        className="custom-scrollbar min-h-28 flex-1 overflow-y-auto pr-1"
+        className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-1"
         aria-live="polite"
       >
         {isLoading ? (
@@ -354,6 +392,7 @@ export default function GifPicker({ onSelect, onClose, busy = false }) {
           </a>
         </p>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,5 +1,5 @@
-import { ArrowLeft, CirclePlus, Info, ListFilter, MessageCircle, MoreHorizontal, Pin, Search, Users, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, CirclePlus, Info, ListFilter, MessageCircle, MoreHorizontal, Pin, Search, Users, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -135,6 +135,8 @@ function ConversationView({ id, onBack }) {
   useEffect(() => subscribeSocialSocket(setSocket), []);
   const parent = useRef(null);
   const scrollStick = useRef(true);
+  const initialScrollDone = useRef(false);
+  const [scrolledAway, setScrolledAway] = useState(false);
   const typingTimer = useRef(null);
   const [text, setText] = useState("");
   const [media, setMedia] = useState(null);
@@ -305,6 +307,8 @@ function ConversationView({ id, onBack }) {
       for (const item of context) client.setQueryData(["messages", id], (old) => mergeMessage(old, item));
     } catch (cause) { setError(errorText(cause)); return; }
     setHighlighted(messageId);
+    scrollStick.current = false;
+    setScrolledAway(true);
     // Message virtualization needs a render pass after the context is added.
     setTimeout(() => {
       const pages = client.getQueryData(["messages", id]);
@@ -337,10 +341,57 @@ function ConversationView({ id, onBack }) {
     window.addEventListener("focus", markRead);
     return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", markRead); window.removeEventListener("focus", markRead); };
   }, [id, user?.id, chat.data?.id, latestIncoming]);
+  const lastMessageId = items[items.length - 1]?._id;
+  const showLatest = () => {
+    const element = parent.current;
+    if (!element || !items.length) return;
+    scrollStick.current = true;
+    setScrolledAway(false);
+    virtual.scrollToIndex(items.length - 1, { align: "end" });
+    element.scrollTop = element.scrollHeight;
+  };
+  // The first query may resolve before the virtualizer connects to its DOM
+  // scroller. Anchor to the newest message after layout, then correct once
+  // rows have been measured. A new conversation remounts this component.
+  useLayoutEffect(() => {
+    if (!msgs.data || !items.length || !parent.current || initialScrollDone.current) return undefined;
+    const positionAtBottom = () => {
+      if (!parent.current) return;
+      scrollStick.current = true;
+      virtual.scrollToIndex(items.length - 1, { align: "end" });
+      parent.current.scrollTop = parent.current.scrollHeight;
+    };
+    positionAtBottom();
+    let secondFrame;
+    const firstFrame = requestAnimationFrame(() => {
+      positionAtBottom();
+      secondFrame = requestAnimationFrame(() => {
+        positionAtBottom();
+        initialScrollDone.current = true;
+      });
+    });
+    return () => { cancelAnimationFrame(firstFrame); if (secondFrame) cancelAnimationFrame(secondFrame); };
+  }, [id, Boolean(msgs.data), items.length, virtual]);
   useEffect(() => {
-    if (!items.length) return;
-    if (scrollStick.current || items[items.length - 1].senderId === user?.id) virtual.scrollToIndex(items.length - 1, { align: "end" });
-  }, [id, items.length, user?.id]);
+    if (!initialScrollDone.current || !lastMessageId || (!scrollStick.current && items[items.length - 1].senderId !== user?.id)) return undefined;
+    const frame = requestAnimationFrame(() => showLatest());
+    return () => cancelAnimationFrame(frame);
+  }, [id, lastMessageId, items.length, user?.id]);
+  // Image decoding and async content change the virtual row measurements.
+  // Preserve bottom anchoring without pulling readers away from older messages.
+  useEffect(() => {
+    const element = parent.current;
+    const list = element?.querySelector("[data-message-virtual-list]");
+    if (!element || !list || typeof ResizeObserver === "undefined") return undefined;
+    let frame;
+    const observer = new ResizeObserver(() => {
+      if (!initialScrollDone.current || !scrollStick.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => { element.scrollTop = element.scrollHeight; });
+    });
+    observer.observe(list);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [id, Boolean(msgs.data), items.length]);
   useEffect(() => {
     if (!socket) return undefined;
     const event = (payload) => {
@@ -377,26 +428,34 @@ function ConversationView({ id, onBack }) {
   const peer = c.members.find((member) => member.user?.id !== user?.id)?.user;
   const peerName = c.type === "group" ? c.name : (c.nicknames?.find((row) => row.userId === peer?.id)?.value || c.name);
   const status = typing ? "Typing..." : c.type === "group" ? `${c.members.length} members` : presence?.visible ? presence.online ? "Active now" : presence.lastActiveAt ? (() => { const min = Math.max(1, Math.floor((Date.now() - new Date(presence.lastActiveAt)) / 60000)); return min < 60 ? `Active ${min} min ago` : "Offline"; })() : "Offline" : "Activity hidden";
-  return <div className="relative flex h-full min-h-0 min-w-0 w-full overflow-hidden border-line bg-surface sm:rounded-2xl sm:border">
+  return <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-surface sm:rounded-2xl sm:border sm:border-line">
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="flex shrink-0 min-w-0 items-center gap-2 border-b border-line bg-surface px-2 py-2.5 sm:px-4 sm:py-3">
-        <button type="button" className="lg:hidden" aria-label="Back to conversations" onClick={onBack}><ArrowLeft size={20}/></button>
-        <Avatar size="sm" name={peerName} src={c.type === "group" ? (c.avatarId ? mediaFile(c.avatarId, true) : undefined) : peer?.image}/>
+      <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-4 py-2 sm:py-3">
+        <button type="button" className="grid size-10 shrink-0 place-items-center rounded-xl text-ink-soft hover:bg-raised lg:hidden" aria-label="Back to conversations" onClick={onBack}><ArrowLeft size={20}/></button>
+        <span className="relative shrink-0"><Avatar size="sm" name={peerName} src={c.type === "group" ? (c.avatarId ? mediaFile(c.avatarId, true) : undefined) : peer?.image}/>
+          {presence?.visible && presence.online && c.type === "direct" && <span title="Online" aria-label="Online" className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-surface bg-success"/>}
+        </span>
         <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setShowInfo(true)} aria-label="Open chat information"><h2 className="truncate text-sm font-bold text-ink">{peerName}</h2><p className="text-xs text-ink-soft">{status}</p></button>
-        
-        <button type="button" title="Chat details" aria-label="Open chat details" className={smallButton} onClick={() => setShowInfo((v) => !v)}><Info size={19}/></button>
+        <button type="button" aria-label="Search messages" title="Search messages" className="grid size-10 shrink-0 place-items-center rounded-xl text-ink-soft hover:bg-raised" onClick={() => setSearchOpen((v) => !v)}><Search size={19}/></button>
+        <button type="button" title="Chat details" aria-label="Open chat details" className="grid size-10 shrink-0 place-items-center rounded-xl border border-line text-ink-soft hover:bg-raised" onClick={() => setShowInfo((v) => !v)}><Info size={19}/></button>
       </header>
       {searchOpen && <div className="border-b border-line p-3"><input autoFocus className={field} placeholder="Search text in this chat" value={search} onChange={(e) => setSearch(e.target.value)}/>{found.isPending && search.length >= 2 && <p className="text-xs text-ink-soft">Searching...</p>}{found.data?.length > 0 && <div className="max-h-32 overflow-y-auto">{found.data.map((msg) => <button key={msg._id} type="button" onClick={() => jump(msg._id)} className="block w-full truncate border-b border-line py-1 text-left text-xs hover:bg-raised">{msg.text}</button>)}</div>}</div>}
       {me.requestState === "pending" && <div className="flex flex-wrap gap-2 border-b border-line bg-brand-soft p-3 text-xs"><span className="w-full">{c.type === "group" ? "Group invitation" : "Message request. Accept to reply."}</span><button className={smallButton} onClick={() => respond("accept")}>Accept</button><button className={smallButton} onClick={() => respond("reject")}>Reject</button></div>}
-      <div ref={parent} onScroll={(event) => { const el = event.currentTarget; scrollStick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160; }} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-canvas px-3 py-3 sm:px-4">
+      <div ref={parent} onScroll={(event) => {
+        if (!initialScrollDone.current) return;
+        const el = event.currentTarget;
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 110;
+        if (scrollStick.current !== atBottom) { scrollStick.current = atBottom; setScrolledAway(!atBottom); }
+      }} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-canvas px-3 py-2 sm:px-4" aria-label="Chat messages">
         {msgs.hasNextPage && <div className="mb-3 text-center"><button className={smallButton} disabled={msgs.isFetchingNextPage} onClick={() => msgs.fetchNextPage()}>{msgs.isFetchingNextPage ? "Loading..." : "Load older messages"}</button></div>}
         {msgs.isPending ? <Loading label="Loading messages..."/> : msgs.error ? <ErrorNotice error={msgs.error}/> : !items.length ? <p className="py-12 text-center text-sm text-ink-soft">No messages yet. Say hello.</p>
-          : <div style={{ height: `${virtual.getTotalSize()}px`, position: "relative" }}>
+          : <div data-message-virtual-list style={{ height: `${virtual.getTotalSize()}px`, position: "relative" }}>
             {virtual.getVirtualItems().map((row) => <div key={items[row.index]?._id} data-index={row.index} ref={virtual.measureElement} style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${row.start}px)` }} className="pb-2 hover:z-30 focus-within:z-30">
               <ChatMessage message={items[row.index]} previous={items[row.index - 1]} next={items[row.index + 1]} conversation={c} userId={user.id} highlighted={highlighted === items[row.index]?._id} onReply={setReply} onEdit={beginEdit} onReact={react} onDelete={deleteAll} onDeleteMe={deleteMine} onPin={pin} onReport={reportMessage} onRetry={retry} onJump={jump}/>
             </div>)}
           </div>}
       </div>
+      {scrolledAway && items.length > 0 && <button type="button" onClick={showLatest} className="absolute bottom-32 right-4 z-20 flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-2 text-xs font-bold text-brand-ink shadow-lg sm:bottom-28" aria-label="Jump to newest message"><ArrowDown size={15}/> Latest messages</button>}
       {me?.accepted && <ChatComposer key={id} text={text} setText={setText} media={media} setMedia={setMedia}
         onSendStart={beginDraftSend}
         onSendProgress={({ clientId, stage, percent }) => updateCached(`pending:${clientId}`, { uploadStage: stage, uploadPercent: percent })}
@@ -432,7 +491,7 @@ export default function MessagesPage() {
     const suffix = value === "inbox" ? "" : `?filter=${encodeURIComponent(value)}`;
     nav(`${location.pathname === "/message-requests" ? "/messages" : location.pathname}${suffix}`, { replace: true });
   };
-  return <div className="grid min-h-0 min-w-0 w-full flex-1 gap-0 lg:grid-cols-[minmax(275px,335px)_minmax(0,1fr)] lg:gap-4">
+  return <div className="grid min-h-0 w-full flex-1 gap-3 lg:grid-cols-[minmax(275px,335px)_minmax(0,1fr)] lg:gap-4">
     <div className={`min-h-0 ${id ? "hidden lg:block" : "block"}`}><ConversationList tab={tab} setTab={switchFilter} selectedId={id} onSelect={(target) => nav(`/messages/${target}${filterSuffix}`)} onCreate={(target) => nav(`/messages/${target}${filterSuffix}`)}/></div>
     <div className={`min-h-0 ${id ? "block" : "hidden lg:block"}`}>{id ? <ConversationView key={id} id={id} onBack={() => nav(`/messages${filterSuffix}`)}/> : <section className={`${panel} flex h-full flex-col items-center justify-center text-center`}><MessageCircle className="size-14 text-brand-ink"/><h2 className="mt-4 text-xl font-bold">Your conversations</h2><p className="mt-1 text-sm text-ink-soft">Select a chat, open your friends list, or start a new conversation.</p></section>}</div>
   </div>;

@@ -18,7 +18,6 @@ import moderationRoutes from "./social/moderationRoutes.js";
 import mediaRoutes from "./media/routes.js";
 import feedRoutes from "./social/feedRoutes.js";
 import storyRoutes from "./social/storyRoutes.js";
-import storyStudioRoutes from "./social/storyStudioRoutes.js";
 import gifRoutes from "./social/gifRoutes.js";
 import { socialRateLimiter } from "./social/rateLimit.js";
 import { authenticate } from "./middleware/authenticate.js";
@@ -103,7 +102,7 @@ export function createApp(auth) {
     }
     next();
   });
-  app.use("/api/social", authenticate, socialRateLimiter, peopleRoutes, messageRoutes, gifRoutes, videoRoutes, notificationRoutes, moderationRoutes, feedRoutes, storyRoutes, storyStudioRoutes, mediaRoutes);
+  app.use("/api/social", authenticate, socialRateLimiter, peopleRoutes, messageRoutes, gifRoutes, videoRoutes, notificationRoutes, moderationRoutes, feedRoutes, storyRoutes, mediaRoutes);
   app.use("/api", (req, _res, next) => {
     // CSRF hardening for community and voice mutations, consistent with social APIs.
     if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && req.headers.origin && req.headers.origin !== new URL(env.CLIENT_URL).origin) {
