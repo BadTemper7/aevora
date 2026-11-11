@@ -553,7 +553,7 @@ export default function ChannelChat({
     setAtBottom(near);
   };
   const send = async (override = null, retry = null) => {
-    if (busy || !permissions.includes("send_messages")) return;
+    if (busy || !permissions.includes("send_messages")) throw new Error("You cannot send messages in this channel right now.");
     const content = override?.content ?? (editing ? text : text.trim());
     const mediaIds = override?.mediaIds ?? (media?.id ? [media.id] : []);
     const gifUrl = override?.gifUrl;
@@ -570,20 +570,19 @@ export default function ChannelChat({
         client.invalidateQueries({ queryKey: key });
         return;
       }
-      const clientId = retry?.clientId || crypto.randomUUID();
+      const clientId = retry?.clientId || override?.clientId || crypto.randomUUID();
       const payload = {
         clientId,
         content: content.trim(),
         mediaIds,
         gifUrl,
-        replyTo: reply?.id,
+        replyTo: override?.replyTo || reply?.id,
         threadId: threadId || undefined,
       };
       if (!retry) {
         stick.current = true;
-        setOptimistic((v) => [
-          ...v,
-          {
+        setOptimistic((v) => {
+          const draft = {
             id: `pending-${clientId}`,
             clientId,
             content: payload.content,
@@ -594,11 +593,13 @@ export default function ChannelChat({
             createdAt: new Date().toISOString(),
             optimistic: true,
             reactions: [],
-          },
-        ]);
-        setText("");
-        setMedia(null);
-        setReply(null);
+          };
+          return v.some((row) => row.clientId === clientId)
+            ? v.map((row) => row.clientId === clientId ? draft : row)
+            : [...v, draft];
+        });
+        // Keep the controlled composer draft until the server confirms success.
+        // ChatComposer clears its own text and queued attachments on success.
       }
       const message = await communityCreate(
         `/channels/${channelId}/messages`,
@@ -606,6 +607,7 @@ export default function ChannelChat({
       );
       client.setQueryData(key, (old) => mergeCommunityMessage(old, message));
       setOptimistic((v) => v.filter((m) => m.clientId !== clientId));
+      if (!retry) setReply(null);
     } catch (err) {
       setError(communityError(err));
       if (retry)
@@ -618,6 +620,7 @@ export default function ChannelChat({
         setOptimistic((v) =>
           v.map((m) => (m.optimistic ? { ...m, failed: true } : m)),
         );
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -900,15 +903,13 @@ export default function ChannelChat({
               setEditing(null);
               setText("");
             }}
-            onSubmit={() => send()}
-            onGif={(gif) =>
-              send({
-                content: "",
-                mediaIds: gif.mediaId ? [gif.mediaId] : [],
-                gifUrl: gif.mediaId ? undefined : gif.url,
-              })
-            }
-            onQuickEmoji={() => send({ content: "👍" })}
+            onSubmit={(submission) => send({ content: submission.text, mediaIds: submission.attachments?.map((item) => item.id) || [], clientId: submission.clientId, replyTo: submission.replyTo })}
+            onGif={(gif) => { void send({
+              content: "",
+              mediaIds: gif.mediaId ? [gif.mediaId] : [],
+              gifUrl: gif.mediaId ? undefined : gif.url,
+            }).catch(() => {}); }}
+            onQuickEmoji={() => { void send({ content: "👍" }).catch(() => {}); }}
             busy={busy}
             mediaPurpose="community"
           />

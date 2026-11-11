@@ -454,7 +454,7 @@ function VoiceChannel({ channel, voice, community }) {
         ? Radio
         : Headphones;
   return (
-    <div className="custom-scrollbar flex flex-1 flex-col items-center gap-5 overflow-y-auto p-6 text-center sm:p-10">
+    <div className="custom-scrollbar flex min-h-0 flex-1 flex-col items-center gap-4 overflow-y-auto p-4 text-center sm:gap-5 sm:p-10">
       <div className="relative mt-2">
         <div className="absolute inset-0 rounded-full bg-brand/40 blur-2xl" />
         <div className="relative grid size-24 place-items-center rounded-[2rem] bg-gradient-to-br from-brand to-brand/60 text-on-brand shadow-2xl">
@@ -462,7 +462,7 @@ function VoiceChannel({ channel, voice, community }) {
         </div>
       </div>
       <div>
-        <h2 className="text-3xl font-extrabold tracking-tight">
+        <h2 className="break-words text-2xl font-extrabold tracking-tight sm:text-3xl">
           {channel.name}
         </h2>
         <p className="mx-auto mt-2 max-w-lg text-sm text-ink-soft">
@@ -869,7 +869,7 @@ export default function CommunityPage() {
               className="-mt-16 shadow-xl ring-4 ring-surface"
             />
             <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">
+              <h1 className="break-words text-2xl font-extrabold tracking-tight sm:text-3xl">
                 {community.name}
               </h1>
               <p className="mt-1 text-xs capitalize text-ink-soft">
@@ -930,8 +930,8 @@ export default function CommunityPage() {
   const SelectedIcon = icons[selected?.type] || Hash;
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="relative z-20 mx-3 mt-3 shrink-0 rounded-3xl border border-line bg-surface/70">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <header className="relative z-20 mx-2 mt-2 shrink-0 rounded-2xl border border-line bg-surface/80 shadow-sm sm:mx-3 sm:mt-3 sm:rounded-3xl">
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
           <Banner
             community={community}
@@ -939,23 +939,23 @@ export default function CommunityPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-surface via-surface/85 to-surface/40" />
         </div>
-        <div className="relative flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4">
-          <div className="relative">
+        <div className="relative flex min-w-0 flex-wrap items-center justify-between gap-2 p-2 sm:gap-3 sm:p-3 sm:px-4">
+          <div className="relative min-w-0 max-w-[calc(100%-5rem)] sm:max-w-none">
             <button
               type="button"
               aria-haspopup="menu"
               aria-expanded={switcher}
               onClick={() => setSwitcher((v) => !v)}
-              className="flex items-center gap-3 rounded-2xl p-1.5 pr-3 text-left transition-colors hover:bg-raised/70"
+              className="flex min-w-0 max-w-full items-center gap-2 rounded-2xl p-1 pr-2 text-left transition-colors hover:bg-raised/70 sm:gap-3 sm:p-1.5 sm:pr-3"
             >
               <CommunityAvatar
                 community={community}
-                size="size-11"
+                size="size-10"
                 text="text-base"
                 className="shadow-lg"
               />
               <span className="min-w-0">
-                <span className="block truncate text-base font-extrabold leading-tight">
+                <span className="block max-w-[45vw] truncate text-sm font-extrabold leading-tight sm:max-w-none sm:text-base">
                   {community.name}
                 </span>
                 <span className="block text-xs text-ink-soft">
@@ -977,7 +977,7 @@ export default function CommunityPage() {
                 />
                 <div
                   role="menu"
-                  className="absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border border-line bg-surface p-2 shadow-2xl"
+                  className="absolute left-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-2 shadow-2xl"
                 >
                   <p className="px-3 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint">
                     Your communities
@@ -1018,7 +1018,7 @@ export default function CommunityPage() {
 
           <nav
             aria-label="Community sections"
-            className="order-last flex w-full gap-1 rounded-full border border-line bg-raised/70 p-1 sm:order-none sm:w-auto"
+            className="order-last grid min-w-0 w-full grid-cols-4 gap-1 rounded-xl border border-line bg-raised/80 p-1 sm:order-none sm:flex sm:w-auto sm:rounded-full"
           >
             {tabs.map(([value, label, Icon]) => (
               <button
@@ -1026,7 +1026,7 @@ export default function CommunityPage() {
                 type="button"
                 aria-current={view === value ? "page" : undefined}
                 onClick={() => setView(value)}
-                className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all sm:flex-none ${view === value ? "bg-surface text-ink shadow-md" : "text-ink-soft hover:text-ink"}`}
+                className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-bold transition-all sm:min-h-9 sm:flex-row sm:gap-1.5 sm:rounded-full sm:px-3.5 sm:text-xs ${view === value ? "bg-surface text-ink shadow-md" : "text-ink-soft hover:text-ink"}`}
               >
                 <Icon size={14} />
                 {label}
@@ -1046,7 +1046,7 @@ export default function CommunityPage() {
               {heroMembers.map((m) => (
                 <span
                   key={m.userId}
-                  className="grid size-7 place-items-center overflow-hidden rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink ring-2 ring-surface"
+                  className={`size-7 place-items-center overflow-hidden rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink ring-2 ring-surface ${heroMembers.indexOf(m) > 0 ? "hidden sm:grid" : "grid"}`}
                 >
                   {m.user?.image ? (
                     <img
@@ -1062,7 +1062,7 @@ export default function CommunityPage() {
                 </span>
               ))}
               {extraMembers > 0 && (
-                <span className="grid size-7 place-items-center rounded-full bg-raised text-[10px] font-bold text-ink-soft ring-2 ring-surface">
+                <span className="hidden size-7 place-items-center rounded-full bg-raised text-[10px] font-bold text-ink-soft ring-2 ring-surface sm:grid">
                   +{extraMembers}
                 </span>
               )}
@@ -1072,7 +1072,7 @@ export default function CommunityPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-3 p-3">
+      <div className="flex min-h-0 min-w-0 flex-1 gap-2 p-0 pt-2 sm:gap-3 sm:p-3">
         {view === "channel" && (
           <>
             {sidebar && (
@@ -1097,13 +1097,13 @@ export default function CommunityPage() {
           </>
         )}
         <section
-          className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${surface} bg-surface/50`}
+          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${surface} !rounded-none bg-surface/60 sm:!rounded-3xl`}
         >
           {view === "channel" && (
             <button
               type="button"
               onClick={() => setSidebar(true)}
-              className="flex items-center gap-2 border-b border-line px-4 py-2.5 text-left text-sm font-bold md:hidden"
+              className="flex min-h-11 shrink-0 items-center gap-2 border-b border-line px-3 py-2 text-left text-sm font-bold md:hidden"
             >
               <Menu size={16} />
               <SelectedIcon size={15} className="text-ink-soft" />

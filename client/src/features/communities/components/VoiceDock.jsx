@@ -4,6 +4,7 @@ import { Track, ConnectionState } from 'livekit-client';
 import { VideoTrack } from '@livekit/components-react';
 import { Camera, CameraOff, ChevronDown, Headphones, HeadphoneOff, Maximize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Settings2 } from 'lucide-react';
 import { useVoiceSession } from '../hooks/useVoiceSession';
+import { loadAudioSettings, storeAudioSettings } from './audioSettings';
 const ctl='inline-flex size-10 items-center justify-center rounded-xl border border-line bg-surface text-ink hover:bg-raised disabled:opacity-50';
 function VoiceInside({session}){
   const {leave,setExpanded,expanded,error,setError}=useVoiceSession();
@@ -12,6 +13,7 @@ function VoiceInside({session}){
   const {localParticipant,isMicrophoneEnabled,isCameraEnabled,isScreenShareEnabled}=useLocalParticipant();
   const tracks=useTracks([Track.Source.Camera,Track.Source.ScreenShare],{onlySubscribed:false});
   const [deaf,setDeaf]=useState(false);
+  const [audioSettings,setAudioSettings]=useState(loadAudioSettings);
   const audioOutputRef=useRef(null);
   const [selectedDevice,setSelectedDevice]=useState('');
   const [inputDevices,setInputDevices]=useState([]);
@@ -33,6 +35,22 @@ function VoiceInside({session}){
     setDeaf(next);
   };
   useEffect(()=>{audioOutputRef.current?.querySelectorAll('audio').forEach(el=>{el.muted=deaf;});},[deaf,participants.length]);
+  const applyCurrentAudioSettings = async (next) => {
+    const track = localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    if (!track) return; // Settings apply on the next microphone capture.
+    if (typeof track.applyConstraints === 'function') await track.applyConstraints(next);
+    else if (track.mediaStreamTrack?.applyConstraints) await track.mediaStreamTrack.applyConstraints(next);
+  };
+  const setAudioOption = (key, enabled) => change('audio', async () => {
+    const next = { ...audioSettings, [key]: enabled };
+    await applyCurrentAudioSettings(next);
+    setAudioSettings(next);
+    storeAudioSettings(next);
+  });
+  const toggleMicrophone = () => change('mic', async () => {
+    await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled, audioSettings);
+    if (!isMicrophoneEnabled) await applyCurrentAudioSettings(audioSettings);
+  });
   const toggleScreen=()=>change('screen',()=>localParticipant.setScreenShareEnabled(!isScreenShareEnabled,{audio:true}));
   useEffect(()=>{
     const onEnd=()=>{
@@ -41,9 +59,9 @@ function VoiceInside({session}){
     room.on('disconnected',onEnd);
     return ()=>room.off('disconnected',onEnd);
   },[room,setError]);
-  return <div className="flex flex-col gap-3">
+  return <div className="flex min-w-0 flex-col gap-2 sm:gap-3">
     <div ref={audioOutputRef} aria-hidden="true"><RoomAudioRenderer /></div>
-    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2">
       <div className="min-w-0"><p className="text-sm font-bold text-ink">{session.quickRoomId?'Private friend voice room':'Voice session connected'}</p><p className="text-xs text-ink-soft">{participants.length} connected · Audio {deaf?'disabled':'enabled'} · {room.state}</p></div>
       <button type="button" className={ctl} onClick={()=>setExpanded(v=>!v)} title={expanded?'Minimize voice':'Expand voice'}>{expanded?<ChevronDown size={17}/>:<Maximize2 size={17}/>}</button>
     </div>
@@ -54,20 +72,34 @@ function VoiceInside({session}){
     </div>}
     {error&&<p role="alert" className="mx-3 text-xs text-danger">{error}</p>}
     <div className="flex flex-wrap items-center justify-center gap-2 border-t border-line p-2" aria-label="Voice session controls">
-      <button type="button" disabled={!session.permissions?.canSpeak && !session.quickRoomId || !!busy} title={isMicrophoneEnabled?'Mute microphone':'Unmute microphone'} className={ctl} onClick={()=>change('mic',()=>localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled))}>{isMicrophoneEnabled?<Mic size={18}/>:<MicOff size={18}/>}</button>
+      <button type="button" disabled={!session.permissions?.canSpeak && !session.quickRoomId || !!busy} title={isMicrophoneEnabled?'Mute microphone':'Unmute microphone'} className={ctl} onClick={toggleMicrophone}>{isMicrophoneEnabled?<Mic size={18}/>:<MicOff size={18}/>}</button>
       <button type="button" title={deaf?'Enable speaker':'Deafen'} className={ctl} onClick={toggleMuteOutput}>{deaf?<HeadphoneOff size={18}/>:<Headphones size={18}/>}</button>
       <button type="button" disabled={!session.permissions?.canCamera && !session.quickRoomId || !!busy} title={isCameraEnabled?'Turn off camera':'Enable camera'} className={ctl} onClick={()=>change('camera',()=>localParticipant.setCameraEnabled(!isCameraEnabled))}>{isCameraEnabled?<Camera size={18}/>:<CameraOff size={18}/>}</button>
       <button type="button" disabled={!shareSupported||(!session.permissions?.canShare && !session.quickRoomId)||!!busy} title={!shareSupported?'Screen share is unavailable on this device':isScreenShareEnabled?'Stop screen share':'Share screen'} className={ctl} onClick={toggleScreen}>{isScreenShareEnabled?<MonitorOff size={18}/>:<MonitorUp size={18}/>}</button>
       <button type="button" title="Audio input settings" className={ctl} onClick={audioDevices}><Settings2 size={17}/></button>
       <button type="button" title="Disconnect from voice" className={`${ctl} !border-danger/40 !text-danger`} onClick={leave}><PhoneOff size={19}/></button>
     </div>
-    {deviceOpen&&<div className="space-y-2 border-t border-line p-3"><label className="block text-xs font-bold text-ink">Microphone input<select className="mt-1 w-full rounded-lg border border-line bg-surface p-2 text-sm" value={selectedDevice} onChange={e=>{setSelectedDevice(e.target.value);change('device',()=>room.switchActiveDevice('audioinput',e.target.value));}}><option value="">System default</option>{inputDevices.map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||'Microphone'}</option>)}</select></label><p className="text-xs text-ink-soft">The browser controls which screens and windows can be shared. System audio depends on browser support.</p></div>}
+    {deviceOpen&&<div className="max-h-[min(46dvh,360px)] space-y-3 overflow-y-auto border-t border-line p-3"><label className="block text-xs font-bold text-ink">Microphone input<select className="mt-1 w-full rounded-lg border border-line bg-surface p-2 text-sm" value={selectedDevice} onChange={e=>{setSelectedDevice(e.target.value);change('device',()=>room.switchActiveDevice('audioinput',e.target.value));}}><option value="">System default</option>{inputDevices.map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||'Microphone'}</option>)}</select></label>
+      <fieldset className="space-y-2 rounded-xl border border-line bg-raised/40 p-3" disabled={Boolean(busy)}>
+        <legend className="px-1 text-xs font-bold text-ink">Microphone processing</legend>
+        {[
+          ['noiseSuppression', 'Noise suppression', 'Reduce steady background noise'],
+          ['echoCancellation', 'Echo cancellation', 'Reduce speaker echo'],
+          ['autoGainControl', 'Automatic volume', 'Keep microphone levels balanced'],
+        ].map(([key,label,hint])=><label key={key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg p-1.5 hover:bg-surface/70">
+          <span className="min-w-0"><span className="block text-sm font-semibold text-ink">{label}</span><span className="block text-xs text-ink-soft">{hint}</span></span>
+          <input type="checkbox" aria-label={label} checked={audioSettings[key]} onChange={event=>void setAudioOption(key,event.target.checked)} className="size-4 shrink-0 accent-brand" />
+        </label>)}
+      </fieldset>
+      <p className="text-xs text-ink-soft">Uses the browser's built-in WebRTC processing. Effectiveness depends on device and browser; these options apply to your microphone, not other participants.</p>
+      <p className="text-xs text-ink-soft">The browser controls screen selection and whether system audio can be shared.</p>
+    </div>}
   </div>;
 }
 export default function VoiceDock(){
   const {session,leave,setSession,expanded,setError,error}=useVoiceSession();
   if(!session)return null;
-  return <aside className={`fixed z-[60] overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl ${expanded?'inset-x-3 bottom-3 mx-auto max-w-[1000px]':'bottom-3 right-3 w-[min(390px,calc(100vw-1.5rem))]'}`} aria-label="Active voice session">
+  return <aside className={`z-[60] overflow-hidden border border-line bg-surface shadow-2xl ${expanded?'fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] mx-auto max-w-[1000px] rounded-2xl sm:inset-x-3':'relative w-full shrink-0 border-x-0 border-b-0 sm:fixed sm:bottom-3 sm:right-3 sm:w-[min(390px,calc(100vw-1.5rem))] sm:rounded-2xl sm:border'}`} aria-label="Active voice session">
     <LiveKitRoom key={session.key} token={session.token} serverUrl={session.serverUrl} connect={true} audio={false} video={false} onError={err=>setError(err.message)} onDisconnected={()=>setSession(old=>old?.key===session.key?null:old)}>
       <VoiceInside session={session}/>
     </LiveKitRoom>

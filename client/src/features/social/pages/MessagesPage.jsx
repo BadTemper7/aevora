@@ -377,13 +377,13 @@ function ConversationView({ id, onBack }) {
   const peer = c.members.find((member) => member.user?.id !== user?.id)?.user;
   const peerName = c.type === "group" ? c.name : (c.nicknames?.find((row) => row.userId === peer?.id)?.value || c.name);
   const status = typing ? "Typing..." : c.type === "group" ? `${c.members.length} members` : presence?.visible ? presence.online ? "Active now" : presence.lastActiveAt ? (() => { const min = Math.max(1, Math.floor((Date.now() - new Date(presence.lastActiveAt)) / 60000)); return min < 60 ? `Active ${min} min ago` : "Offline"; })() : "Offline" : "Activity hidden";
-  return <div className="relative flex h-full min-h-0 w-full overflow-hidden rounded-2xl border border-line bg-surface">
+  return <div className="relative flex h-full min-h-0 min-w-0 w-full overflow-hidden border-line bg-surface sm:rounded-2xl sm:border">
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-3 sm:px-4">
+      <header className="flex shrink-0 min-w-0 items-center gap-2 border-b border-line bg-surface px-2 py-2.5 sm:px-4 sm:py-3">
         <button type="button" className="lg:hidden" aria-label="Back to conversations" onClick={onBack}><ArrowLeft size={20}/></button>
         <Avatar size="sm" name={peerName} src={c.type === "group" ? (c.avatarId ? mediaFile(c.avatarId, true) : undefined) : peer?.image}/>
         <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setShowInfo(true)} aria-label="Open chat information"><h2 className="truncate text-sm font-bold text-ink">{peerName}</h2><p className="text-xs text-ink-soft">{status}</p></button>
-        <button type="button" aria-label="Search messages" title="Search messages" className={smallButton} onClick={() => setSearchOpen((v) => !v)}><Search size={18}/></button>
+        
         <button type="button" title="Chat details" aria-label="Open chat details" className={smallButton} onClick={() => setShowInfo((v) => !v)}><Info size={19}/></button>
       </header>
       {searchOpen && <div className="border-b border-line p-3"><input autoFocus className={field} placeholder="Search text in this chat" value={search} onChange={(e) => setSearch(e.target.value)}/>{found.isPending && search.length >= 2 && <p className="text-xs text-ink-soft">Searching...</p>}{found.data?.length > 0 && <div className="max-h-32 overflow-y-auto">{found.data.map((msg) => <button key={msg._id} type="button" onClick={() => jump(msg._id)} className="block w-full truncate border-b border-line py-1 text-left text-xs hover:bg-raised">{msg.text}</button>)}</div>}</div>}
@@ -432,7 +432,7 @@ export default function MessagesPage() {
     const suffix = value === "inbox" ? "" : `?filter=${encodeURIComponent(value)}`;
     nav(`${location.pathname === "/message-requests" ? "/messages" : location.pathname}${suffix}`, { replace: true });
   };
-  return <div className="grid min-h-0 w-full flex-1 gap-3 lg:grid-cols-[minmax(275px,335px)_minmax(0,1fr)] lg:gap-4">
+  return <div className="grid min-h-0 min-w-0 w-full flex-1 gap-0 lg:grid-cols-[minmax(275px,335px)_minmax(0,1fr)] lg:gap-4">
     <div className={`min-h-0 ${id ? "hidden lg:block" : "block"}`}><ConversationList tab={tab} setTab={switchFilter} selectedId={id} onSelect={(target) => nav(`/messages/${target}${filterSuffix}`)} onCreate={(target) => nav(`/messages/${target}${filterSuffix}`)}/></div>
     <div className={`min-h-0 ${id ? "block" : "hidden lg:block"}`}>{id ? <ConversationView key={id} id={id} onBack={() => nav(`/messages${filterSuffix}`)}/> : <section className={`${panel} flex h-full flex-col items-center justify-center text-center`}><MessageCircle className="size-14 text-brand-ink"/><h2 className="mt-4 text-xl font-bold">Your conversations</h2><p className="mt-1 text-sm text-ink-soft">Select a chat, open your friends list, or start a new conversation.</p></section>}</div>
   </div>;

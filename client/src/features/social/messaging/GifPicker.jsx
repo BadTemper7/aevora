@@ -182,7 +182,7 @@ export default function GifPicker({ onSelect, onClose, busy = false }) {
       ref={container}
       role="dialog"
       aria-label="Choose a GIF"
-      className="absolute bottom-full left-0 z-50 mb-3 flex max-h-[min(75vh,540px)] w-[min(400px,calc(100vw-2rem))] flex-col rounded-3xl border border-line bg-surface p-4 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] ring-1 ring-black/5"
+      className="fixed inset-x-2 bottom-[calc(6.7rem+env(safe-area-inset-bottom))] z-[70] mb-0 flex max-h-[min(60dvh,450px)] w-auto flex-col rounded-3xl sm:absolute sm:inset-auto sm:bottom-full sm:left-0 sm:mb-3 sm:max-h-[min(75vh,540px)] sm:w-[min(400px,calc(100vw-2rem))] border border-line bg-surface p-4 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.35)] ring-1 ring-black/5"
     >
       <div className="mb-3 flex shrink-0 items-center justify-between">
         <h3 className="text-base font-bold tracking-tight text-ink">
