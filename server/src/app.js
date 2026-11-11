@@ -49,7 +49,35 @@ export function createApp(auth) {
     }
     next();
   });
-  app.use(helmet({ crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, crossOriginResourcePolicy: { policy: "same-origin" } }));
+  // Allow only the external origins used by AEVORA. Helmet retains its other
+  // default CSP directives, including script-src 'self' (no unsafe-inline).
+  // ImageKit may use a custom CDN domain; derive it from the configured endpoint.
+  const imageKitOrigin = env.IMAGEKIT_URL_ENDPOINT
+    ? new URL(env.IMAGEKIT_URL_ENDPOINT).origin
+    : null;
+  const mediaImageOrigins = [
+    "https://*.giphy.com",
+    "https://*.googleusercontent.com",
+    ...(imageKitOrigin ? [imageKitOrigin] : []),
+  ];
+
+  app.use(helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginResourcePolicy: { policy: "same-origin" },
+    contentSecurityPolicy: {
+      directives: {
+        connectSrc: ["'self'", "https://api.giphy.com", "wss:", "https://*.livekit.cloud"],
+        imgSrc: ["'self'", "data:", "blob:", ...mediaImageOrigins],
+        mediaSrc: [
+          "'self'",
+          "blob:",
+          "https://*.giphy.com",
+          ...(imageKitOrigin ? [imageKitOrigin] : []),
+        ],
+        workerSrc: ["'self'", "blob:"],
+      },
+    },
+  }));
   app.use(cors(corsOptions));
   if (env.NODE_ENV === "development") app.use(morgan("dev"));
   // Auth consumes the raw request before JSON middleware.

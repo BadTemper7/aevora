@@ -15,21 +15,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Apply the saved theme before first paint so there is no flash. -->
-    <script>
-      (function () {
-        try {
-          var saved = JSON.parse(localStorage.getItem("aevora-theme") || "{}");
-          var pref = (saved.state && saved.state.theme) || "dark";
-          var dark =
-            pref === "dark" ||
-            (pref === "system" &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.dataset.theme = dark ? "dark" : "light";
-        } catch (e) {
-          document.documentElement.dataset.theme = "dark";
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>
