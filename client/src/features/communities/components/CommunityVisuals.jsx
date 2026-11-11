@@ -23,6 +23,7 @@ export function CommunityAvatar({
   size = "size-12",
   text = "text-lg",
   rounded = "rounded-2xl",
+  imageFit = "cover",
   className = "",
 }) {
   const [failedId, setFailedId] = useState("");
@@ -36,7 +37,7 @@ export function CommunityAvatar({
           key={community.iconId}
           src={communityFile(community.iconId, true)}
           alt=""
-          className="size-full object-cover"
+          className={`size-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`}
           onError={() => setFailedId(community.iconId)}
         />
       ) : (

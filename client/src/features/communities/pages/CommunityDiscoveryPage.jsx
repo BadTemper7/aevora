@@ -83,12 +83,13 @@ function CommunityCard({ community, onJoin, pending, compact = false }) {
           {community.visibility}
         </span>
       </div>
-      <div className="flex flex-1 flex-col gap-3 px-4 pb-4">
+      <div className="relative flex flex-1 flex-col gap-3 px-4 pb-4">
         <CommunityAvatar
           community={community}
           size="size-14"
           text="text-xl"
-          className="-mt-7 shadow-lg ring-4 ring-surface"
+          imageFit="contain"
+          className="relative z-10 -mt-7 shadow-lg ring-4 ring-surface"
         />
         <div className="min-w-0">
           <h3 className="truncate text-base font-extrabold tracking-tight">
