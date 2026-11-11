@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, rename, rm, stat, statfs } from "node:fs/promises";
 import path from "node:path";
@@ -9,7 +9,8 @@ import { AppError } from "../utils/AppError.js";
 import { canSeeVideo, objectId, privacyFor, audienceAllows, blocked } from "../social/helpers.js";
 import { Conversation, Media, Message, Profile, Video, SocialPost, SocialStory, StoryMusic } from "../social/models.js";
 import { canSeePost, canSeeStory } from "../social/feedRules.js";
-import { Community, CommunityMember, ChannelMessage } from "../communities/models.js";
+import { Community, CommunityBan, CommunityInvitation, CommunityMember, ChannelMessage } from "../communities/models.js";
+import { invitationAllowsViewer } from "../communities/invitationPolicy.js";
 import { channelContext } from "../communities/permissions.js";
 import { wrap } from "../social/routeUtils.js";
 import { uploadRateLimiter } from "../social/rateLimit.js";
@@ -127,8 +128,19 @@ async function authorizeMedia(req, media) {
   if (req.user.id === media.ownerId) return true;
   if (media.purpose === "community") {
     const spaces = await Community.find({ $or: [{ iconId: String(media._id) }, { bannerId: String(media._id) }], deletedAt: null }).lean();
+    // Invite-only/private branding can be shown to an invited user before
+    // they join. An invitation NEVER authorizes attached community files.
+    const token = typeof req.query.invite === 'string' ? req.query.invite : '';
+    const invite = /^[a-f0-9]{64}$/.test(token)
+      ? await CommunityInvitation.findOne({ tokenHash: createHash('sha256').update(token).digest('hex') }).lean()
+      : null;
     for (const space of spaces) {
       if (space.visibility === "public" || await CommunityMember.exists({ communityId: space._id, userId: req.user.id, status: "active" })) return true;
+      if (invite && String(invite.communityId) === String(space._id) && invitationAllowsViewer(invite, req.user.id)) {
+        const banned = await CommunityBan.exists({ communityId: space._id, userId: req.user.id,
+          $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] });
+        if (!banned) return true;
+      }
     }
     const messages = await ChannelMessage.find({ mediaIds: media._id, deletedAt: null }).limit(20).lean();
     for (const message of messages) {

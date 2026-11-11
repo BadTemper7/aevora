@@ -24,6 +24,7 @@ export function CommunityAvatar({
   text = "text-lg",
   rounded = "rounded-2xl",
   imageFit = "cover",
+  inviteToken = "",
   className = "",
 }) {
   const [failedId, setFailedId] = useState("");
@@ -35,7 +36,7 @@ export function CommunityAvatar({
       {hasImage ? (
         <img
           key={community.iconId}
-          src={communityFile(community.iconId, true)}
+          src={communityFile(community.iconId, true, inviteToken)}
           alt=""
           className={`size-full ${imageFit === "contain" ? "object-contain p-1" : "object-cover"}`}
           onError={() => setFailedId(community.iconId)}
@@ -47,11 +48,9 @@ export function CommunityAvatar({
   );
 }
 
-export function Banner({ community, className = "" }) {
+export function Banner({ community, className = "", inviteToken = "" }) {
   const [failedId, setFailedId] = useState("");
-  const hasImage = Boolean(
-    community.bannerId && failedId !== community.bannerId,
-  );
+  const hasImage = Boolean(community.bannerId && failedId !== community.bannerId);
   return (
     <div
       className={`relative overflow-hidden bg-gradient-to-br ${bannerTint(community.name)} ${className}`}
@@ -59,7 +58,7 @@ export function Banner({ community, className = "" }) {
       {hasImage && (
         <img
           key={community.bannerId}
-          src={communityFile(community.bannerId)}
+          src={communityFile(community.bannerId, false, inviteToken)}
           alt=""
           loading="lazy"
           className="size-full object-cover"

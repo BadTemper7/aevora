@@ -6,4 +6,13 @@ export const communityPatch=async(path,body)=> (await api.patch(path,body)).data
 export const communityPut=async(path,body)=> (await api.put(path,body)).data.data;
 export const communityDelete=async(path,body)=> (await api.delete(path,{data:body})).data.data;
 export const communityError=(error)=> error?.response?.data?.error?.message || error?.message || 'The request failed. Please try again.';
-export const communityFile=(id,thumb=false)=> id?`/api/social/media/${encodeURIComponent(id)}/file${thumb?'?thumb=1':''}`:null;
+// Invitation tokens only travel to our own media endpoint. Existing callers
+// remain unchanged; the token grants access to invite-only branding images.
+export const communityFile = (id, thumb = false, inviteToken = "") => {
+  if (!id) return null;
+  const params = new URLSearchParams();
+  if (thumb) params.set("thumb", "1");
+  if (inviteToken) params.set("invite", inviteToken);
+  const query = params.toString();
+  return `/api/social/media/${encodeURIComponent(id)}/file${query ? `?${query}` : ""}`;
+};

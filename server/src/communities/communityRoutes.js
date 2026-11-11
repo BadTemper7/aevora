@@ -13,6 +13,7 @@ import { emitCommunity, removeCommunityUser } from './events.js';
 import { communityContext, need, hierarchyCheck, PERMISSIONS, HIERARCHY, channelContext, canInviteUser } from './permissions.js';
 import { Community, CommunityMember, CommunityRole, CommunityInvitation, CommunityBan, ChannelCategory, CommunityChannel, CommunityAuditLog, CommunityNotificationSettings, CommunityReport, ChannelMessage } from './models.js';
 import { removeCommunityUserFromVoice, removeAllCommunityVoice } from './mediaService.js';
+import { invitationAllowsViewer } from './invitationPolicy.js';
 
 const router = Router();
 // Navigation badge for unread channel messages. Uses the same lastRead cursors
@@ -104,9 +105,19 @@ async function enroll(community, userId, { rulesAccepted = false, requested = fa
 function canManageTarget(ctx, target) { hierarchyCheck(ctx.member, target); }
 async function invitePreview(invite, userId) {
   const c = await Community.findById(invite.communityId).lean();
-  if (!c || c.deletedAt || invite.revokedAt || invite.expiresAt && invite.expiresAt <= new Date() || invite.maxUses > 0 && invite.uses >= invite.maxUses || invite.invitedId && invite.invitedId !== userId) throw new AppError('Invitation is expired or unavailable.', 404);
+  if (!c || c.deletedAt || !invitationAllowsViewer(invite, userId)) throw new AppError('Invitation is expired or unavailable.', 404);
   if (await activeBan(c._id, userId)) throw new AppError('You cannot join this community.', 403);
   return { invite, community: c };
+}
+
+// An existing member may use a previously issued link to navigate to the
+// community, even if that link was revoked, expired or exhausted afterward.
+// The invitation must still be a real token, and the community must exist.
+async function communityAlreadyJoined(invite, userId) {
+  const community = await Community.findOne({ _id: invite.communityId, deletedAt: null }).lean();
+  if (!community || !(await activeMember(community, userId))) return null;
+  if (await activeBan(community._id, userId)) throw new AppError('You cannot join this community.', 403);
+  return community;
 }
 
 router.get('/communities', wrap(async req => {
@@ -130,23 +141,31 @@ router.get('/communities/invitations', wrap(async req => {
   const ids = invites.map(i => i.communityId);
   const communities = await Community.find({ _id: { $in: ids }, deletedAt: null }).lean();
   const map = new Map(communities.map(c => [String(c._id), sanitize(c)]));
-  return invites.filter(i => map.has(String(i.communityId)) && (!i.expiresAt || i.expiresAt > new Date())).map(i => ({ id: String(i._id), community: map.get(String(i.communityId)), inviterId: i.inviterId, createdAt: i.createdAt }));
+  const memberRows = await CommunityMember.find({ userId: req.user.id, communityId: { $in: ids }, status: 'active' }).select('communityId').lean();
+  const memberIds = new Set(memberRows.map(m => String(m.communityId)));
+  return invites.filter(i => map.has(String(i.communityId)) && (!i.expiresAt || i.expiresAt > new Date()))
+    .map(i => ({ id: String(i._id), community: map.get(String(i.communityId)), inviterId: i.inviterId, createdAt: i.createdAt,
+      alreadyMember: memberIds.has(String(i.communityId)) }));
 }));
 router.get('/communities/invite/:token', wrap(async req => {
   const token = String(req.params.token || '');
   if (!/^[a-f0-9]{64}$/.test(token)) throw new AppError('Invalid invitation.', 404);
   const invite = await CommunityInvitation.findOne({ tokenHash: hash(token) }).select('+tokenHash').lean();
   if (!invite) throw new AppError('Invitation not found.', 404);
+  const joined = await communityAlreadyJoined(invite, req.user.id);
+  if (joined) return { community: sanitize(joined), isMember: true };
   const { community } = await invitePreview(invite, req.user.id);
-  return { community: sanitize(community), expiresAt: invite.expiresAt, remainingUses: invite.maxUses ? Math.max(0, invite.maxUses - invite.uses) : null };
+  return { community: sanitize(community), isMember: false, expiresAt: invite.expiresAt,
+    remainingUses: invite.maxUses ? Math.max(0, invite.maxUses - invite.uses) : null };
 }));
 router.post('/communities/invite/:token/accept', wrap(async req => {
   const token = String(req.params.token || '');
   if (!/^[a-f0-9]{64}$/.test(token)) throw new AppError('Invalid invitation.', 404);
   const invite = await CommunityInvitation.findOne({ tokenHash: hash(token) }).select('+tokenHash');
   if (!invite) throw new AppError('Invitation not found.', 404);
+  const joined = await communityAlreadyJoined(invite, req.user.id);
+  if (joined) return { status: 'active', community: sanitize(joined) };
   const { community } = await invitePreview(invite, req.user.id);
-  if (await activeMember(community, req.user.id)) return { status: 'active', community: sanitize(community) };
   const { rulesAccepted } = body(req, z.object({ rulesAccepted: z.boolean().default(false) }));
   if (community.rules?.trim() && !rulesAccepted) throw new AppError('Accept the community rules.', 400);
   const advanced = await CommunityInvitation.findOneAndUpdate({ _id: invite._id, revokedAt: null, $and: [{ $or: [{ maxUses: 0 }, { $expr: { $lt: ['$uses', '$maxUses'] } }] }, { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] }] }, { $inc: { uses: 1 } }, { new: true });
@@ -164,13 +183,17 @@ router.post('/communities/invitations/:id/respond', wrap(async req => {
   const invite = await CommunityInvitation.findOne({ _id: objectId(req.params.id), invitedId: req.user.id, status: 'pending', revokedAt: null });
   if (!invite) throw new AppError('Invitation not found.', 404);
   if (action === 'decline') { await CommunityInvitation.updateOne({ _id: invite._id }, { $set: { status: 'declined' } }); return { status: 'declined' }; }
+  const joined = await communityAlreadyJoined(invite, req.user.id);
+  if (joined) {
+    await CommunityInvitation.updateOne({ _id: invite._id }, { $set: { status: 'accepted' } });
+    return { status: 'active', community: sanitize(joined) };
+  }
   const { community } = await invitePreview(invite, req.user.id);
   if (community.rules?.trim() && !rulesAccepted) throw new AppError('Accept the community rules.', 400);
-  if (await activeMember(community, req.user.id)) return { status: 'active' };
   const result = await enroll(community, req.user.id, { rulesAccepted, requested: community.requireApproval });
   await CommunityInvitation.updateOne({ _id: invite._id }, { $set: { status: 'accepted' } });
   emitCommunity(String(community._id), 'community:member', { communityId: String(community._id), userId: req.user.id, status: result.status });
-  return { status: result.status };
+  return { status: result.status, community: sanitize(community) };
 }));
 
 router.post('/communities', wrap(async req => {
@@ -386,7 +409,7 @@ router.post('/communities/:id/invitations',wrap(async req=>{
   const { username, userId: userProvided, maxUses, expiresHours, temporary }=body(req,z.object({username:z.string().trim().max(50).optional(),userId:z.string().optional(),maxUses:z.number().int().min(0).max(10000).default(0),expiresHours:z.number().int().min(1).max(720).default(168),temporary:z.boolean().default(false)}));
   let invitedId=userProvided;
   if(username){const escaped=username.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const user=await mongoose.connection.db.collection('user').findOne({username:{$regex:`^${escaped}$`,$options:'i'}},{projection:{_id:1}});if(!user)throw new AppError('Username not found.',404);invitedId=String(user._id);}
-  if(invitedId){requireId(invitedId);if(!await canInviteUser(req.user.id,invitedId))throw new AppError('Cannot invite this account.',403);
+  if(invitedId){requireId(invitedId);if(!await canInviteUser(req.user.id,invitedId))throw new AppError('This account does not accept community invitations from you.',403);
     const existing=await CommunityMember.exists({communityId:ctx.community._id,userId:invitedId,status:'active'});
     if(existing)throw new AppError('User is already a member.',409);
   }

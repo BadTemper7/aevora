@@ -269,8 +269,12 @@ export default function CommunityDiscoveryPage() {
         { action, rulesAccepted: rules },
       );
       refresh();
-      if (r.status === "active")
+      if (r.status === "active" && r.community?.id) {
+        navigate(`/communities/${r.community.id}`);
+        return;
+      } else if (r.status === "active") {
         setSuccess("Invitation accepted. Your community is in My Communities.");
+      }
       else if (r.status === "pending")
         setSuccess("Membership approval is pending.");
     } catch (err) {
@@ -767,7 +771,7 @@ function InvitationRow({ invitation, busy, onRespond }) {
           <p className="text-xs capitalize text-ink-soft">
             Invited to join · {invitation.community.visibility}
           </p>
-          {invitation.community.rules && (
+          {!invitation.alreadyMember && invitation.community.rules && (
             <details className="mt-1 max-w-lg text-xs">
               <summary className="cursor-pointer text-brand-ink">
                 Read community rules
@@ -789,22 +793,31 @@ function InvitationRow({ invitation, busy, onRespond }) {
         </div>
       </div>
       <div className="flex gap-2">
-        <button
-          className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-on-brand disabled:opacity-50"
-          disabled={
-            busy || Boolean(invitation.community.rules && !rulesAccepted)
-          }
-          onClick={() => onRespond(invitation.id, "accept", rulesAccepted)}
-        >
-          Accept
-        </button>
-        <button
-          className="rounded-full border border-line px-4 py-2 text-xs font-bold hover:bg-raised disabled:opacity-50"
-          disabled={busy}
-          onClick={() => onRespond(invitation.id, "decline", false)}
-        >
-          Decline
-        </button>
+        {invitation.alreadyMember ? (
+          <Link
+            to={`/communities/${invitation.community.id}`}
+            className="inline-flex min-h-10 items-center rounded-full bg-brand px-4 py-2 text-xs font-bold text-on-brand"
+          >
+            Open community
+          </Link>
+        ) : (
+          <>
+            <button
+              className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-on-brand disabled:opacity-50"
+              disabled={busy || Boolean(invitation.community.rules && !rulesAccepted)}
+              onClick={() => onRespond(invitation.id, "accept", rulesAccepted)}
+            >
+              Accept
+            </button>
+            <button
+              className="rounded-full border border-line px-4 py-2 text-xs font-bold hover:bg-raised disabled:opacity-50"
+              disabled={busy}
+              onClick={() => onRespond(invitation.id, "decline", false)}
+            >
+              Decline
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
